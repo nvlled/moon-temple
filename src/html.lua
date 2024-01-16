@@ -1,9 +1,15 @@
-local _ = require("underscore")
-
 local function tableLen(t)
     local count = 0
     for _, _ in pairs(t) do count = count + 1 end
     return count
+end
+
+local function map(t, fn)
+    local result = {}
+    for i, v in pairs(t) do
+        table.insert(result, fn(v, i))
+    end
+    return result
 end
 
 local function indent(s, n)
@@ -32,7 +38,8 @@ local function indent(s, n)
 end
 
 local function underscore2Dash(s)
-    return string.gsub(s, "_", "-")
+    local result = string.gsub(s, "_", "-")
+    return result
 end
 
 local function styleToString(t)
@@ -56,15 +63,27 @@ local function attrsToString(attrs)
     if tableLen(attrs) == 0 then return '' end
     local entries = {}
     for k, v in pairs(attrs) do
-        table.insert(entries, underscore2Dash(k) .. "=" .. '"' .. v .. '"')
+        if type(k) == "string" then
+            if k == "style" and type(v) == "table" then
+                table.insert(entries, underscore2Dash(k) .. "=" .. '"' .. styleToString(v) .. '"')
+            elseif type(v) == "boolean" then
+                table.insert(entries, underscore2Dash(k))
+            else
+                table.insert(entries, underscore2Dash(k) .. "=" .. '"' .. tostring(v) .. '"')
+            end
+        end
     end
     return " " .. table.concat(entries, " ")
 end
 
 local function nodeToString(node, level)
+    if not node.children or #node.children == 0 and node.tag ~= "script" then
+        return "<" .. node.tag .. attrsToString(node.attrs) .. "/>"
+    end
+
     if not level then level = 1 end
     local body = table.concat(
-        _.map(node.children, function(sub)
+        map(node.children, function(sub)
             if type(sub) == "string" then
                 return indent(sub, level)
             end
@@ -79,9 +98,9 @@ local nodeMeta = {
     __tostring = nodeToString
 }
 
-local function _node(tagName, arg)
-    if type(arg) == "string" then
-        local result = { tag = tagName, attrs = {}, children = { arg } }
+local function _node(tagName, args)
+    if type(args) == "string" then
+        local result = { tag = tagName, attrs = {}, children = { args } }
         setmetatable(result, nodeMeta)
         return result
     end
@@ -89,13 +108,9 @@ local function _node(tagName, arg)
     local attrs    = {}
     local children = {}
 
-    for k, v in pairs(arg) do
+    for k, v in pairs(args) do
         if type(k) == "string" then
-            if k == "style" and type(v) == "table" then
-                attrs[k] = styleToString(v)
-            else
-                attrs[k] = tostring(v)
-            end
+            attrs[k] = v
         elseif type(k) == "number" then
             if type(v) == "string" then
                 table.insert(children, v)
@@ -129,8 +144,10 @@ end
 
 
 local function Node(tagName)
-    return function(arg)
-        return _node(tagName, arg)
+    return function(args)
+        args = args or {}
+        local result = _node(tagName, args)
+        return result
     end
 end
 

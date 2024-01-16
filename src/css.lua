@@ -15,7 +15,7 @@ local function cssToString(ruleset)
     return result
 end
 
-local function _CSS(arg, selector)
+local function _CSS(args, selector)
     if not selector then
         selector = ''
     end
@@ -29,7 +29,7 @@ local function _CSS(arg, selector)
         rule,
     }
 
-    for key, value in pairs(arg) do
+    for key, value in pairs(args) do
         if type(key) == "string" then
             if type(value) == "table" then
                 local subRules = _CSS(value, selector .. " " .. key)
@@ -57,15 +57,15 @@ local function _CSS(arg, selector)
     return result
 end
 
-local function CSS(selector)
-    return function(arg)
-        local css = _CSS(arg, selector)
+function CSS(selector)
+    return function(args)
+        local css = _CSS(args, selector)
         setmetatable(css, {
             __tostring = cssToString
         })
+
         return css
     end
 end
-
 
 return CSS
