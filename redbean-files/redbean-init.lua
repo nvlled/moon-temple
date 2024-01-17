@@ -59,7 +59,6 @@ if options["init"] then
     dofile(options["init"])
 end
 
-
 function OnHttpRequest()
     function isDir(file)
         local st = unix.stat(file)
@@ -247,7 +246,8 @@ elseif command == "serve" then
 
     runHook(serveDir, "init")
 else
-    print("usage: " .. arg[-1] .. " <serve|render|build> <filename|dir>")
+    print("usage: " .. arg[-1] .. " <serve | render | build> <filename | dir>")
+    print("-h to see help documentation")
 end
 
 if command ~= "serve" then
