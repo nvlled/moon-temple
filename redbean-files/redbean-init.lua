@@ -1,6 +1,11 @@
 require 'html'
 require 'css'
 
+local systemPackages = {}
+for k, v in pairs(package.loaded) do
+    systemPackages[k] = v
+end
+
 local args
 local options
 local serveDir = "pages"
@@ -60,15 +65,23 @@ if options["init"] then
 end
 
 function OnHttpRequest()
-    function isDir(file)
+    for k in pairs(package.loaded) do
+        if not systemPackages[k] then
+            package.loaded[k] = nil
+            print("reloading", k)
+        end
+    end
+
+    local function isDir(file)
         local st = unix.stat(file)
         if not st then return false end
         return unix.S_ISDIR(st:mode())
     end
 
-    runHook(serveDir, "pre")
+    runHook(".", "pre")
 
-    local pagePath = serveDir .. GetPath()
+    local pagePath = "." .. GetPath()
+    PAGE_PATH = GetPath()
 
     if isDir(pagePath) then
         pagePath = pagePath .. "index.html"
@@ -82,7 +95,7 @@ function OnHttpRequest()
         local filename = pagePath
         local contents = dofile(filename)
 
-        runHook(serveDir, "post")
+        runHook(".", "post")
 
         if not contents then
             contents = PAGE_BODY
@@ -156,10 +169,6 @@ if command == "build" then
             error("source and destination directories cannot be the same")
         end
 
-        --print(">>>", srcDir, "is sub", destDir, isSubDir(srcDir, destDir))
-        --print(">>>", destDir, "is sub", srcDir, isSubDir(destDir, srcDir))
-
-
         if isSubDir(destDir, srcDir) then
             error("destination cannot be inside source")
         end
@@ -184,18 +193,23 @@ if command == "build" then
         unix.rmrf(destDir)
     end
 
-    runHook(destDir, "init")
+    package.path = package.path .. ";" .. unix.realpath(srcDir) .. "/?.lua"
+
+    runHook(srcDir, "init")
+
     walkDir(srcDir, function(filename, kind)
         local src = path.join(srcDir, filename)
         local dest = path.join(destDir, filename)
         unix.makedirs(path.dirname(dest))
 
         if endsWith(dest, ".lua") then
-            runHook(destDir, "init")
-            runHook(destDir, "pre")
+            PAGE_PATH = "/" .. string.sub(filename, 1, #filename - 4)
+
+            runHook(srcDir, "init")
+            runHook(srcDir, "pre")
 
             local contents = dofile(src)
-            contents = runHook(destDir, "post") or contents
+            contents = runHook(srcDir, "post") or contents
 
             if not contents then
                 contents = PAGE_BODY
@@ -205,8 +219,6 @@ if command == "build" then
             if str and str ~= "" then
                 local dest2 = string.sub(dest, 1, #dest - 4) -- remove .lua from filename
                 print("render " .. src .. " -> " .. dest2)
-                print(str)
-                print("-------------------")
                 Barf(dest2, str, 0644)
             end
         else
@@ -242,9 +254,26 @@ elseif command == "serve" then
         unix.exit()
     end
 
-    ProgramDirectory(serveDir)
+
+    local function addRelPath(dir)
+        local spath =
+            debug.getinfo(1, 'S').source
+            :sub(2)
+            :gsub("^([^/])", "./%1")
+            :gsub("[^/]*$", "")
+        dir = dir and (dir .. "/") or ""
+        spath = spath .. dir
+        package.path = spath .. "?.lua;"
+            .. spath .. "?/init.lua"
+            .. package.path
+    end
+
+    package.path = package.path .. ";" .. unix.realpath(serveDir) .. "/?.lua"
+
+    ProgramDirectory(unix.realpath(serveDir))
 
     runHook(serveDir, "init")
+    unix.chdir(serveDir)
 else
     print("usage: " .. arg[-1] .. " <serve | render | build> <filename | dir>")
     print("-h to see help documentation")

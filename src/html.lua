@@ -126,7 +126,6 @@ local function nodeToString(node, level)
             return nodeToString(sub, level)
         end), (node.tag == "pre" and "" or "\n")
     )
-
     if allString then
         return "<" .. node.tag .. attrsToString(node.attrs) .. ">" ..
             (hasNewline and "\n" or "") ..
