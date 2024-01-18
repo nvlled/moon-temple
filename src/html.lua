@@ -1,3 +1,7 @@
+local function trim(s)
+    return s:match("^%s*(.-)%s*$")
+end
+
 local function tableLen(t)
     local count = 0
     for _, _ in pairs(t) do count = count + 1 end
@@ -12,21 +16,43 @@ local function map(t, fn)
     return result
 end
 
-local function indent(s, n)
-    -- source: https://stackoverflow.com/a/7615129
-    local function strsplit(inputstr, sep)
-        if sep == nil then
-            sep = "%s"
+local function strsplit(inputstr, sep)
+    local i = 1
+    return function()
+        local a, b = inputstr:find(sep, i)
+        if i then
+            if not a then
+                local s = inputstr:sub(i, -1)
+                i = nil
+                return s
+            else
+                local s = inputstr:sub(i, a - 1)
+                i = b + 1
+                return s
+            end
         end
-        local t = {}
-        for str in string.gmatch(inputstr, "([^" .. sep .. "]+)") do
-            table.insert(t, str)
+    end
+end
+
+local function deindent(s, notrim)
+    local result = {}
+    for line in strsplit(s, "\n") do
+        if not notrim then
+            line = line:match("^%s*(.-)%s*$")
         end
-        return t
+        table.insert(result, line)
     end
 
+    return table.concat(result, "\n")
+end
+
+local function indent(s, n, trim)
     local result = {}
-    for _, line in ipairs(strsplit(s, "\n")) do
+    for line in strsplit(s, "\n") do
+        if trim then
+            line = line:match("^%s*(.-)%s*$")
+        end
+
         local spaces = ''
         for _ = 1, n do
             spaces = spaces .. '  '
@@ -82,20 +108,49 @@ local function nodeToString(node, level)
     end
 
     if not level then level = 1 end
+    local allString = true
+    local hasNewline = false
+    for _, x in ipairs(node.children) do
+        if type(x) ~= "string" then
+            allString = false
+        elseif x:find("\n") then
+            hasNewline = true
+        end
+    end
+
     local body = table.concat(
         map(node.children, function(sub)
             if type(sub) == "string" then
-                return indent(sub, level)
+                return deindent(sub, node.tag == "pre")
             end
-            return indent(nodeToString(sub, level + 1), level)
-        end), "\n"
+            return nodeToString(sub, level)
+        end), (node.tag == "pre" and "" or "\n")
     )
+
+    if allString then
+        return "<" .. node.tag .. attrsToString(node.attrs) .. ">" ..
+            (hasNewline and "\n" or "") ..
+            body .. "</" .. node.tag .. ">"
+    end
+
     return "<" .. node.tag .. attrsToString(node.attrs) .. ">\n" ..
-        body .. (#body and '\n' or '') .. "</" .. node.tag .. ">"
+        indent(body, level) .. (#body and '\n' or '') .. "</" .. node.tag .. ">"
 end
 
 local nodeMeta = {
-    __tostring = nodeToString
+    __tostring = nodeToString,
+    __div = function(a, b)
+        table.insert(
+            a.children, type(b) == "function" and b() or b
+        )
+        return a
+    end,
+    __pow = function(a, b)
+        table.insert(
+            a.children, type(b) == "function" and b() or b
+        )
+        return a
+    end
 }
 
 local function _node(tagName, args)
@@ -107,6 +162,10 @@ local function _node(tagName, args)
 
     local attrs    = {}
     local children = {}
+
+    if getmetatable(args) == nodeMeta then
+        args = { args }
+    end
 
     for k, v in pairs(args) do
         if type(k) == "string" then
@@ -121,11 +180,13 @@ local function _node(tagName, args)
                 elseif mt and mt.__tostring then
                     table.insert(children, tostring(v))
                 else
-                    local elems = {}
                     for _, elem in ipairs(v) do
-                        table.insert(elems, tostring(elem))
+                        if type(elem) == "function" then
+                            table.insert(children, elem())
+                        else
+                            table.insert(children, elem)
+                        end
                     end
-                    table.insert(children, table.concat(elems, " "))
                 end
             elseif type(v) == "function" then
                 table.insert(children, tostring(v()))
@@ -143,12 +204,26 @@ local function _node(tagName, args)
 end
 
 
-local function Node(tagName)
+function Node(tagName)
     return function(args)
         args = args or {}
         local result = _node(tagName, args)
         return result
     end
+end
+
+function GetComponentArgs(args)
+    local props = {}
+    local children = {}
+    for k, v in pairs(args) do
+        if type(k) == "string" then
+            props[k] = v
+        else
+            table.insert(children, v)
+        end
+    end
+
+    return props, children
 end
 
 HTML = Node 'html'
