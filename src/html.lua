@@ -1,3 +1,5 @@
+local ext = require("ext")
+
 local function trim(s)
     return s:match("^%s*(.-)%s*$")
 end
@@ -6,61 +8,6 @@ local function tableLen(t)
     local count = 0
     for _, _ in pairs(t) do count = count + 1 end
     return count
-end
-
-local function map(t, fn)
-    local result = {}
-    for i, v in pairs(t) do
-        table.insert(result, fn(v, i))
-    end
-    return result
-end
-
-local function strsplit(inputstr, sep)
-    local i = 1
-    return function()
-        local a, b = inputstr:find(sep, i)
-        if i then
-            if not a then
-                local s = inputstr:sub(i, -1)
-                i = nil
-                return s
-            else
-                local s = inputstr:sub(i, a - 1)
-                i = b + 1
-                return s
-            end
-        end
-    end
-end
-
-local function deindent(s, notrim)
-    local result = {}
-    for line in strsplit(s, "\n") do
-        if not notrim then
-            line = line:match("^%s*(.-)%s*$")
-        end
-        table.insert(result, line)
-    end
-
-    return table.concat(result, "\n")
-end
-
-local function indent(s, n, trim)
-    local result = {}
-    for line in strsplit(s, "\n") do
-        if trim then
-            line = line:match("^%s*(.-)%s*$")
-        end
-
-        local spaces = ''
-        for _ = 1, n do
-            spaces = spaces .. '  '
-        end
-        table.insert(result, spaces .. line)
-    end
-
-    return table.concat(result, "\n")
 end
 
 local function underscore2Dash(s)
@@ -108,48 +55,38 @@ local function nodeToString(node, level)
     end
 
     if not level then level = 1 end
-    local allString = true
-    local hasNewline = false
-    for _, x in ipairs(node.children) do
-        if type(x) ~= "string" then
-            allString = false
-        elseif x:find("\n") then
-            hasNewline = true
-        end
-    end
 
     local body = table.concat(
-        map(node.children, function(sub)
+        ext.map(node.children, function(sub)
             if type(sub) == "string" then
-                return deindent(sub, node.tag == "pre")
+                return sub
             end
             return nodeToString(sub, level)
-        end), (node.tag == "pre" and "" or "\n")
+        end), ""
     )
-    if allString then
-        return "<" .. node.tag .. attrsToString(node.attrs) .. ">" ..
-            (hasNewline and "\n" or "") ..
-            body .. "</" .. node.tag .. ">"
+
+    if node.tag == '' then
+        return body
     end
 
-    return "<" .. node.tag .. attrsToString(node.attrs) .. ">\n" ..
-        indent(body, level) .. (#body and '\n' or '') .. "</" .. node.tag .. ">"
+    return "<" .. node.tag .. attrsToString(node.attrs) .. ">" ..
+        body .. "</" .. node.tag .. ">"
+end
+
+local appendChild = function(a, b)
+    if type(a) == "function" then
+        a = a()
+    end
+    table.insert(
+        a.children, type(b) == "function" and b() or b
+    )
+    return a
 end
 
 local nodeMeta = {
     __tostring = nodeToString,
-    __div = function(a, b)
-        table.insert(
-            a.children, type(b) == "function" and b() or b
-        )
-        return a
-    end,
-    __pow = function(a, b)
-        table.insert(
-            a.children, type(b) == "function" and b() or b
-        )
-        return a
-    end
+    __div = appendChild,
+    __pow = appendChild,
 }
 
 local function _node(tagName, args)
@@ -180,7 +117,9 @@ local function _node(tagName, args)
                     table.insert(children, tostring(v))
                 else
                     for _, elem in ipairs(v) do
-                        if type(elem) == "function" then
+                        if getmetatable(elem) == nodeMeta then
+                            table.insert(children, elem)
+                        elseif type(elem) == "function" or getmetatable(elem).__call then
                             table.insert(children, elem())
                         else
                             table.insert(children, elem)
@@ -202,13 +141,23 @@ local function _node(tagName, args)
     return result
 end
 
+local ctorMeta = {
+    __call = function(self, args) return self.ctor(args) end,
+    __pow = function(self, args) return self.ctor(args) end,
+    __div = function(self, args) return self.ctor(args) end,
+    __idiv = function(self, args) return self.ctor(args) end,
+}
 
 function Node(tagName)
-    return function(args)
+    local ctor = function(args)
         args = args or {}
+        if getmetatable(args) == ctorMeta then
+            args = args {}
+        end
         local result = _node(tagName, args)
         return result
     end
+    return setmetatable({ ctor = ctor }, ctorMeta)
 end
 
 function GetComponentArgs(args)
@@ -281,6 +230,95 @@ H6 = Node 'h6'
 IMG = Node 'img'
 VIDEO = Node 'video'
 IFRAME = Node 'iframe'
+
+FRAGMENT = Node ''
+
+local ppMeta = {
+    __div = function(a, b)
+        if type(a) == "function" then
+            a = a()
+        end
+
+        local function f(x)
+            if #a.children == 0 then
+                table.insert(a.children, x)
+            else
+                table.insert(
+                    a.children[#a.children].children, x
+                )
+            end
+        end
+
+        b = type(b) == "function" and b() or b
+        if type(b) == "string" then
+            local c = PP(b)
+
+            for _, z in ipairs(c.children[1].children) do
+                f(z)
+            end
+
+            for i = 2, #c.children do
+                appendChild(a, c.children[i])
+            end
+
+            return a
+        end
+
+        f(b)
+
+
+        return a
+    end,
+    __pow = function(a, b) return nodeMeta.__pow(a, b) end,
+    __tostring = function(x) return nodeMeta.__tostring(x) end,
+}
+
+function PP(args)
+    if type(args) == "string" then
+        local result = {}
+        for block in ext.split(args, "\n\n") do
+            if block == '' or not block then
+                table.insert(result, BR {})
+            else
+                table.insert(result, P(block))
+            end
+        end
+        local frag = FRAGMENT(result)
+
+        return setmetatable(frag, ppMeta)
+    end
+
+    local p = P {}
+    local result = { p }
+    for _, arg in ipairs(args) do
+        if type(arg) ~= "string" then
+            table.insert(p.children, arg)
+        else
+            local i = 1
+            for block in ext.split(arg, "\n\n") do
+                if i == 1 then
+                    table.insert(p.children, block)
+                    goto continue
+                end
+
+                if block == '' or not block then
+                    table.insert(p.children, BR {})
+                else
+                    p = P {}
+                    table.insert(result, p)
+                    table.insert(p.children, block)
+                end
+
+                ::continue::
+                i = i + 1
+            end
+        end
+    end
+
+    local frag = FRAGMENT(result)
+
+    return setmetatable(frag, ppMeta)
+end
 
 return {
     Node,

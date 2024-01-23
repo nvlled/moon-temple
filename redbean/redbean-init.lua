@@ -10,13 +10,36 @@ local args
 local options
 local serveDir = "pages"
 
+function
+
+function WalkDir(root, fn)
+    local function loop(dir)
+        for name, kind, ino, off in assert(unix.opendir(path.join(root, dir))) do
+            if name == '.' or name == '..' then
+                goto continue
+            end
+
+            local filename = path.join(dir, name)
+            if kind == unix.DT_DIR then
+                loop(filename)
+            else
+                fn(filename, kind)
+            end
+
+            ::continue::
+        end
+    end
+
+    loop("")
+end
+
 local function endsWith(s, suffix)
     return s:sub(- #suffix) == suffix
 end
 
----@type fun(dir: string, type: "init"|"pre"|"post")
+---@type fun(dir: string, type: "init")
 local function runHook(dir, type)
-    local hookFile = path.join(dir, "__" .. type .. "__.lua")
+    local hookFile = path.join(dir, type .. ".lua")
 
     if options[type] then
         dofile(options[type])
@@ -51,6 +74,10 @@ local function parseOptions()
                 skipNext = true
                 options[x] = arg[i + 1]
             end
+
+            if options[x] == "0" or options[x] == "false" or options[x] == "" then
+                options[x] = false
+            end
         end
 
         ::continue::
@@ -59,10 +86,6 @@ local function parseOptions()
     return args, options
 end
 
-args, options = parseOptions()
-if options["init"] then
-    dofile(options["init"])
-end
 
 function OnHttpRequest()
     for k in pairs(package.loaded) do
@@ -78,10 +101,9 @@ function OnHttpRequest()
         return unix.S_ISDIR(st:mode())
     end
 
-    runHook(".", "pre")
 
-    local pagePath = "." .. GetPath()
     PAGE_PATH = GetPath()
+    local pagePath = "." .. PAGE_PATH
 
     if isDir(pagePath) then
         pagePath = pagePath .. "index.html"
@@ -92,10 +114,9 @@ function OnHttpRequest()
     end
 
     if path.exists(pagePath) then
+        runHook(".", "init")
         local filename = pagePath
         local contents = dofile(filename)
-
-        runHook(".", "post")
 
         if not contents then
             contents = PAGE_BODY
@@ -107,30 +128,10 @@ function OnHttpRequest()
     end
 end
 
+args, options = parseOptions()
 local command = args[1]
 
 if command == "build" then
-    local function walkDir(root, fn, subDir)
-        local function loop(dir)
-            for name, kind, ino, off in assert(unix.opendir(path.join(root, dir))) do
-                if name == '.' or name == '..' then
-                    goto continue
-                end
-
-                local filename = path.join(dir, name)
-                if kind == unix.DT_DIR then
-                    loop(filename)
-                else
-                    fn(filename, kind)
-                end
-
-                ::continue::
-            end
-        end
-
-        loop("")
-    end
-
     local function deferClose(fd)
         local file = { fd = fd }
         setmetatable(file, { __close = function() unix.close(fd) end })
@@ -165,21 +166,17 @@ if command == "build" then
         srcDir = unix.realpath(srcDir)
         destDir = unix.realpath(destDir)
 
-        if srcDir == destDir then
-            error("source and destination directories cannot be the same")
-        end
-
-        if isSubDir(destDir, srcDir) then
+        if srcDir == destDir and not options.inplace then
+            error("source and destination directories cannot be the same, unless set --inplace")
+        elseif isSubDir(destDir, srcDir) then
             error("destination cannot be inside source")
-        end
-        if isSubDir(srcDir, destDir) then
+        elseif isSubDir(srcDir, destDir) then
             error("source cannot be inside destination")
         end
     end
 
-
-    local srcDir = arg[2]
-    local destDir = arg[3] or "output"
+    local srcDir = args[2]
+    local destDir = args[3] or "output"
 
     if not srcDir then
         print("source directory is required")
@@ -195,21 +192,22 @@ if command == "build" then
 
     package.path = package.path .. ";" .. unix.realpath(srcDir) .. "/?.lua"
 
-    runHook(srcDir, "init")
+    if srcDir ~= destDir or options.inplace then
+        WalkDir(srcDir, function(filename, kind)
+            local src = path.join(srcDir, filename)
+            local dest = path.join(destDir, filename)
 
-    walkDir(srcDir, function(filename, kind)
-        local src = path.join(srcDir, filename)
-        local dest = path.join(destDir, filename)
-        unix.makedirs(path.dirname(dest))
+            if not endsWith(dest, ".lua") then
+                return
+            end
 
-        if endsWith(dest, ".lua") then
+            dest = string.sub(dest, 1, #dest - 4) -- remove .lua from filename
+
             PAGE_PATH = "/" .. string.sub(filename, 1, #filename - 4)
 
             runHook(srcDir, "init")
-            runHook(srcDir, "pre")
 
             local contents = dofile(src)
-            contents = runHook(srcDir, "post") or contents
 
             if not contents then
                 contents = PAGE_BODY
@@ -217,18 +215,50 @@ if command == "build" then
 
             local str = tostring(contents)
             if str and str ~= "" then
-                local dest2 = string.sub(dest, 1, #dest - 4) -- remove .lua from filename
-                print("render " .. src .. " -> " .. dest2)
-                Barf(dest2, str, 0644)
+                print("render " .. src .. " -> " .. dest)
+                Barf(dest, str, 0644)
             end
-        else
-            print("copy " .. src .. " -> " .. dest)
-            copyFile(src, dest)
-        end
-    end)
+        end)
+    else
+        WalkDir(srcDir, function(filename, kind)
+            local src = path.join(srcDir, filename)
+            local dest = path.join(destDir, filename)
+            unix.makedirs(path.dirname(dest))
 
-    Barf(path.join(destDir, ".site-generator"), "moon-temple")
-elseif command == "build" then
+            if endsWith(dest, ".lua") then
+                PAGE_PATH = "/" .. string.sub(filename, 1, #filename - 4)
+
+                runHook(srcDir, "init")
+
+                local contents = dofile(src)
+
+                if not contents then
+                    contents = PAGE_BODY
+                end
+
+                local str = tostring(contents)
+                if str and str ~= "" then
+                    local dest2 = string.sub(dest, 1, #dest - 4) -- remove .lua from filename
+                    print("render " .. src .. " -> " .. dest2)
+                    Barf(dest2, str, 0644)
+                end
+            else
+                print("copy " .. src .. " -> " .. dest)
+                copyFile(src, dest)
+            end
+        end)
+
+        Barf(path.join(destDir, ".site-generator"), "moon-temple")
+    end
+elseif command == "run" then
+    local filename = args[2]
+    if not filename then
+        print("filename is required")
+        unix.exit(1)
+    end
+
+    print(unix.realpath("."))
+    dofile(filename)
 elseif command == "render" then
     local filename = args[2]
     if not filename then
@@ -237,10 +267,8 @@ elseif command == "render" then
     end
 
     runHook(path.dirname(filename), "init")
-    runHook(path.dirname(filename), "pre")
 
     local contents = dofile(filename)
-    contents = runHook(path.dirname(filename), "post") or contents
 
     if not contents then
         contents = PAGE_BODY
@@ -254,25 +282,10 @@ elseif command == "serve" then
         unix.exit()
     end
 
-
-    local function addRelPath(dir)
-        local spath =
-            debug.getinfo(1, 'S').source
-            :sub(2)
-            :gsub("^([^/])", "./%1")
-            :gsub("[^/]*$", "")
-        dir = dir and (dir .. "/") or ""
-        spath = spath .. dir
-        package.path = spath .. "?.lua;"
-            .. spath .. "?/init.lua"
-            .. package.path
-    end
-
     package.path = package.path .. ";" .. unix.realpath(serveDir) .. "/?.lua"
 
     ProgramDirectory(unix.realpath(serveDir))
 
-    runHook(serveDir, "init")
     unix.chdir(serveDir)
 else
     print("usage: " .. arg[-1] .. " <serve | render | build> <filename | dir>")

@@ -1,13 +1,7 @@
+local ext = require("ext")
+
 local function trim(s)
     return s:match("^%s*(.-)%s*$")
-end
-
-local function map(t, fn)
-    local result = {}
-    for i, v in pairs(t) do
-        table.insert(result, fn(v, i))
-    end
-    return result
 end
 
 local function underscore2Dash(s)
@@ -15,44 +9,31 @@ local function underscore2Dash(s)
 end
 
 local function cssToString(ruleset)
-    local result = ""
-    for _, rule in ipairs(ruleset) do
+    local buffer = {}
+    local n = #ruleset
+    for i, rule in ipairs(ruleset) do
         if not rule or rule.selector == "" then
             goto continue
         end
-        result = result .. trim(rule.selector) .. " {\n"
+        table.insert(buffer, trim(rule.selector) .. " {\n")
         for k, v in pairs(rule.declarations) do
             local decl = "  " .. k .. ": " .. v .. ";\n"
-            result = result .. decl
+            table.insert(buffer, decl)
         end
-        result = result .. "}\n"
+        table.insert(buffer, "}")
+        if i ~= n then
+            table.insert(buffer, "\n")
+        end
 
         ::continue::
     end
-    return result
+    return table.concat(buffer, "")
 end
 
 local cssMeta = {
     __tostring = cssToString
 }
 
-local function strsplit(inputstr, sep)
-    local i = 1
-    return function()
-        local a, b = inputstr:find(sep, i)
-        if i then
-            if not a then
-                local s = inputstr:sub(i, -1)
-                i = nil
-                return s
-            else
-                local s = inputstr:sub(i, a - 1)
-                i = b + 1
-                return s
-            end
-        end
-    end
-end
 
 local function appendSelector(parent, child, nospace)
     local sep = nospace and '' or ' '
@@ -61,7 +42,7 @@ local function appendSelector(parent, child, nospace)
     end
 
     local xs = {}
-    for k in strsplit(child, ",") do
+    for k in ext.split(child, ",") do
         k = k:match("^%s*(.-)%s*$")
         table.insert(xs, parent .. sep .. k)
     end
