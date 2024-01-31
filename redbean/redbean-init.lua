@@ -1,5 +1,6 @@
-require 'html'
-require 'css'
+require "html"
+require "css"
+local ext = require "ext"
 
 local systemPackages = {}
 for k, v in pairs(package.loaded) do
@@ -10,12 +11,87 @@ local args
 local options
 local serveDir = "pages"
 
-function
+local Stub
+Stub = {
+    __call = function(self) return {} end,
+    __concat = function(self) return {} end,
+    __div = function(self) return {} end,
+    __pow = function(self) return {} end,
+    __idiv = function(self) return {} end,
+}
+function StubFunction()
+    return {}
+end
+
+function GetPageData(filename)
+    local env = {}
+    for k, v in pairs(_ENV) do
+        if type(v) == "function" then
+            env[k] = StubFunction
+        else
+            env[k] = v
+        end
+    end
+
+    local f = loadfile(filename, "t", env)
+    if f then
+        pcall(f)
+    end
+
+    return env
+end
+
+function GetBasePath(path)
+    local i = string.find(path, "/")
+    local j = string.find(path, "/", i + 1)
+    if not j then
+        return ""
+    end
+    return path:sub(2, j - 1)
+end
+
+function GetPageList()
+    local result = {}
+
+    WalkDir(".", function(filename)
+        local fileExt = ext.getFileExt(filename)
+        local link = "/" .. filename
+        if fileExt == ".html.lua" then
+            link = "/" .. filename:sub(1, #filename - 4)
+        elseif fileExt ~= ".html" then
+            return
+        end
+
+        local dir, base = ext.dirPath(link)
+
+        local data = GetPageData(filename)
+
+        table.insert(result, {
+            filename = filename,
+            link = link,
+            path = { dir = dir, base = base },
+            title = data.PAGE_TITLE,
+            desc = data.PAGE_DESC,
+            datetimeStr = data.PAGE_DATE,
+            datetime = ext.parseDateTime(data.PAGE_DATE),
+        })
+    end)
+
+    table.sort(result, function(x, y)
+        if x.datetime and y.datetime then return x.datetime > y.datetime end
+        if x.datetime and not y.datetime then return true end
+        if not x.datetime and y.datetime then return false end
+
+        return false
+    end)
+
+    return result
+end
 
 function WalkDir(root, fn)
     local function loop(dir)
         for name, kind, ino, off in assert(unix.opendir(path.join(root, dir))) do
-            if name == '.' or name == '..' then
+            if name == "." or name == ".." then
                 goto continue
             end
 
@@ -65,7 +141,7 @@ local function parseOptions()
             local j = 1
             while x:sub(j, j) == "-" do j = j + 1 end
             x = string.sub(x, j)
-            local eqIndex = string.find(x, '=')
+            local eqIndex = string.find(x, "=")
             if eqIndex then
                 local val = string.sub(x, eqIndex + 1, -1)
                 x = string.sub(x, 1, eqIndex - 1)
@@ -91,7 +167,6 @@ function OnHttpRequest()
     for k in pairs(package.loaded) do
         if not systemPackages[k] then
             package.loaded[k] = nil
-            print("reloading", k)
         end
     end
 
@@ -144,7 +219,7 @@ if command == "build" then
 
         while true do
             local data = unix.read(srcFile)
-            if data == '' then break end
+            if data == "" then break end
             unix.write(destFile, data)
         end
 
@@ -188,14 +263,20 @@ if command == "build" then
     if Slurp(path.join(destDir, ".site-generator")) == "moon-temple" then
         print("cleaning " .. destDir)
         unix.rmrf(destDir)
+        unix.makedirs(destDir)
     end
 
-    package.path = package.path .. ";" .. unix.realpath(srcDir) .. "/?.lua"
+    srcDir = unix.realpath(srcDir)
+    destDir = unix.realpath(destDir)
+    package.path = package.path .. ";" .. path.join(unix.realpath(srcDir), "?.lua")
 
-    if srcDir ~= destDir or options.inplace then
+    unix.chdir(srcDir)
+
+    if srcDir == destDir or options.inplace then
         WalkDir(srcDir, function(filename, kind)
             local src = path.join(srcDir, filename)
             local dest = path.join(destDir, filename)
+            unix.makedirs(path.dirname(path.dirname(dest)))
 
             if not endsWith(dest, ".lua") then
                 return
@@ -205,7 +286,7 @@ if command == "build" then
 
             PAGE_PATH = "/" .. string.sub(filename, 1, #filename - 4)
 
-            runHook(srcDir, "init")
+            runHook(".", "init")
 
             local contents = dofile(src)
 
@@ -228,7 +309,7 @@ if command == "build" then
             if endsWith(dest, ".lua") then
                 PAGE_PATH = "/" .. string.sub(filename, 1, #filename - 4)
 
-                runHook(srcDir, "init")
+                runHook(".", "init")
 
                 local contents = dofile(src)
 
@@ -243,7 +324,7 @@ if command == "build" then
                     Barf(dest2, str, 0644)
                 end
             else
-                print("copy " .. src .. " -> " .. dest)
+                print("copy " .. unix.realpath(ext.relativePath(src)) .. " -> " .. dest)
                 copyFile(src, dest)
             end
         end)
@@ -257,22 +338,32 @@ elseif command == "run" then
         unix.exit(1)
     end
 
-    print(unix.realpath("."))
     dofile(filename)
 elseif command == "render" then
-    local filename = args[2]
-    if not filename then
-        print("filename is required")
+    local projectDir = args[2]
+    local filename = args[3]
+
+    if not projectDir or not filename then
+        print("usage: " .. arg[-1] .. " render <project_dir> [page-filename.html.lua]")
         unix.exit(1)
     end
 
-    runHook(path.dirname(filename), "init")
+    package.path = package.path .. ";" .. path.join(unix.realpath(projectDir), "?.lua")
+    unix.chdir(projectDir)
+
+    runHook(".", "init")
+
+    if not unix.stat(filename) then
+        print("file not found: \"" .. filename .. "\" in \"" .. projectDir .. "\"")
+        unix.exit(1)
+    end
 
     local contents = dofile(filename)
 
     if not contents then
         contents = PAGE_BODY
     end
+
     print(contents)
 elseif command == "serve" then
     serveDir = args[2]

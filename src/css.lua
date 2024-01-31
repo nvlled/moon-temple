@@ -8,18 +8,31 @@ local function underscore2Dash(s)
     return string.gsub(s, "_", "-")
 end
 
+local function sortTable(t)
+    local result = {}
+    for k, v in pairs(t) do
+        table.insert(result, { k = k, v = v })
+    end
+    table.sort(result, function(a, b)
+        return a.k < b.k
+    end)
+    return result
+end
+
 local function cssToString(ruleset)
     local buffer = {}
     local n = #ruleset
     for i, rule in ipairs(ruleset) do
-        if not rule or rule.selector == "" then
+        if not rule or rule.selector == "" or ext.len(rule.declarations) == 0 then
             goto continue
         end
         table.insert(buffer, trim(rule.selector) .. " {\n")
-        for k, v in pairs(rule.declarations) do
-            local decl = "  " .. k .. ": " .. v .. ";\n"
+
+        for _, e in ipairs(sortTable(rule.declarations)) do
+            local decl = "  " .. e.k .. ": " .. e.v .. ";\n"
             table.insert(buffer, decl)
         end
+
         table.insert(buffer, "}")
         if i ~= n then
             table.insert(buffer, "\n")
@@ -36,15 +49,18 @@ local cssMeta = {
 
 
 local function appendSelector(parent, child, nospace)
-    local sep = nospace and '' or ' '
-    if not child:find(',') then
+    local sep = nospace and "" or " "
+    if not parent:find(",") and not child:find(",") then
         return parent .. sep .. child
     end
 
     local xs = {}
-    for k in ext.split(child, ",") do
-        k = k:match("^%s*(.-)%s*$")
-        table.insert(xs, parent .. sep .. k)
+    for h in ext.split(parent, ",") do
+        h = h:match("^%s*(.-)%s*$")
+        for k in ext.split(child, ",") do
+            k = k:match("^%s*(.-)%s*$")
+            table.insert(xs, h .. sep .. k)
+        end
     end
 
     return table.concat(xs, ", ")
@@ -52,7 +68,7 @@ end
 
 local function _CSS(args, selector)
     if not selector then
-        selector = ''
+        selector = ""
     end
 
     local rule = {
@@ -106,7 +122,7 @@ end
 
 function CSS(selector)
     if type(selector) == "table" then
-        local css = _CSS(selector, '')
+        local css = _CSS(selector, "")
         setmetatable(css, cssMeta)
         return css
     end

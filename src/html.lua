@@ -5,6 +5,7 @@ local function trim(s)
 end
 
 local function tableLen(t)
+    if not t then return 0 end
     local count = 0
     for _, _ in pairs(t) do count = count + 1 end
     return count
@@ -13,6 +14,19 @@ end
 local function underscore2Dash(s)
     local result = string.gsub(s, "_", "-")
     return result
+end
+
+local function attrEscape(attr)
+    attr = attr:gsub("\"", "&quot;")
+    attr = attr:gsub("'", "&#39;")
+    return attr
+end
+
+local function htmlEscape(html)
+    html = html:gsub("&", "&amp;")
+    html = html:gsub(">", "&gt;")
+    html = html:gsub("<", "&lt;")
+    return html
 end
 
 local function styleToString(t)
@@ -33,16 +47,17 @@ local function styleToString(t)
 end
 
 local function attrsToString(attrs)
-    if tableLen(attrs) == 0 then return '' end
+    if tableLen(attrs) == 0 then return "" end
     local entries = {}
     for k, v in pairs(attrs) do
         if type(k) == "string" then
+            k = attrEscape(underscore2Dash(k))
             if k == "style" and type(v) == "table" then
-                table.insert(entries, underscore2Dash(k) .. "=" .. '"' .. styleToString(v) .. '"')
+                table.insert(entries, underscore2Dash(k) .. "=" .. '"' .. attrEscape(styleToString(v)) .. '"')
             elseif type(v) == "boolean" then
                 table.insert(entries, underscore2Dash(k))
             else
-                table.insert(entries, underscore2Dash(k) .. "=" .. '"' .. tostring(v) .. '"')
+                table.insert(entries, underscore2Dash(k) .. "=" .. '"' .. attrEscape(tostring(v)) .. '"')
             end
         end
     end
@@ -51,7 +66,8 @@ end
 
 local function nodeToString(node, level)
     if not node.children or #node.children == 0 and node.tag ~= "script" then
-        return "<" .. node.tag .. attrsToString(node.attrs) .. "/>"
+        local tag = node.tag or ""
+        return "<" .. tag .. attrsToString(node.attrs) .. "/>"
     end
 
     if not level then level = 1 end
@@ -59,13 +75,13 @@ local function nodeToString(node, level)
     local body = table.concat(
         ext.map(node.children, function(sub)
             if type(sub) == "string" then
-                return sub
+                return htmlEscape(sub)
             end
             return nodeToString(sub, level)
         end), ""
     )
 
-    if node.tag == '' then
+    if node.tag == "" then
         return body
     end
 
@@ -83,6 +99,7 @@ local appendChild = function(a, b)
     return a
 end
 
+local ctorMeta
 local nodeMeta = {
     __tostring = nodeToString,
     __div = appendChild,
@@ -99,7 +116,7 @@ local function _node(tagName, args)
     local attrs    = {}
     local children = {}
 
-    if getmetatable(args) == nodeMeta then
+    if getmetatable(args) ~= nil then
         args = { args }
     end
 
@@ -113,6 +130,8 @@ local function _node(tagName, args)
                 local mt = getmetatable(v)
                 if mt == nodeMeta then
                     table.insert(children, v)
+                elseif mt and mt == ctorMeta then
+                    table.insert(children, v())
                 elseif mt and mt.__tostring then
                     table.insert(children, tostring(v))
                 else
@@ -127,9 +146,9 @@ local function _node(tagName, args)
                     end
                 end
             elseif type(v) == "function" then
-                table.insert(children, tostring(v()))
+                table.insert(children, "x" .. tostring(v()))
             elseif v then
-                table.insert(children, tostring(v))
+                table.insert(children, "y" .. tostring(v))
                 --error("invalid child node: " .. type(v))
             end
         end
@@ -141,7 +160,7 @@ local function _node(tagName, args)
     return result
 end
 
-local ctorMeta = {
+ctorMeta = {
     __call = function(self, args) return self.ctor(args) end,
     __pow = function(self, args) return self.ctor(args) end,
     __div = function(self, args) return self.ctor(args) end,
@@ -174,64 +193,64 @@ function GetComponentArgs(args)
     return props, children
 end
 
-HTML = Node 'html'
-HEAD = Node 'head'
-TITLE = Node 'title'
-BODY = Node 'body'
-SCRIPT = Node 'script'
-LINK = Node 'link'
-STYLE = Node 'style'
-META = Node 'meta'
+HTML = Node "html"
+HEAD = Node "head"
+TITLE = Node "title"
+BODY = Node "body"
+SCRIPT = Node "script"
+LINK = Node "link"
+STYLE = Node "style"
+META = Node "meta"
 
-P = Node 'p'
-A = Node 'a'
-DIV = Node 'div'
-SPAN = Node 'span'
+P = Node "p"
+A = Node "a"
+DIV = Node "div"
+SPAN = Node "span"
 
-B = Node 'b'
-I = Node 'i'
-EM = Node 'em'
-STRONG = Node 'strong'
-SMALL = Node 'small'
-S = Node 's'
-PRE = Node 'pre'
-CODE = Node 'code'
+B = Node "b"
+I = Node "i"
+EM = Node "em"
+STRONG = Node "strong"
+SMALL = Node "small"
+S = Node "s"
+PRE = Node "pre"
+CODE = Node "code"
 
-OL = Node 'ol'
-UL = Node 'ul'
-LI = Node 'li'
+OL = Node "ol"
+UL = Node "ul"
+LI = Node "li"
 
-FORM = Node 'form'
-INPUT = Node 'input'
-TEXTAREA = Node 'textarea'
-BUTTON = Node 'button'
-LABEL = Node 'label'
-SELECT = Node 'select'
-OPTION = Node 'option'
+FORM = Node "form"
+INPUT = Node "input"
+TEXTAREA = Node "textarea"
+BUTTON = Node "button"
+LABEL = Node "label"
+SELECT = Node "select"
+OPTION = Node "option"
 
-TABLE = Node 'table'
-THEAD = Node 'thead'
-TBODY = Node 'tbody'
-TR = Node 'tr'
-TD = Node 'td'
+TABLE = Node "table"
+THEAD = Node "thead"
+TBODY = Node "tbody"
+TR = Node "tr"
+TD = Node "td"
 
-SVG = Node 'svg'
+SVG = Node "svg"
 
-BR = Node 'br'
-HR = Node 'hr'
+BR = Node "br"
+HR = Node "hr"
 
-H1 = Node 'h1'
-H2 = Node 'h2'
-H3 = Node 'h3'
-H4 = Node 'h4'
-H5 = Node 'h5'
-H6 = Node 'h6'
+H1 = Node "h1"
+H2 = Node "h2"
+H3 = Node "h3"
+H4 = Node "h4"
+H5 = Node "h5"
+H6 = Node "h6"
 
-IMG = Node 'img'
-VIDEO = Node 'video'
-IFRAME = Node 'iframe'
+IMG = Node "img"
+VIDEO = Node "video"
+IFRAME = Node "iframe"
 
-FRAGMENT = Node ''
+FRAGMENT = Node ""
 
 local ppMeta = {
     __div = function(a, b)
@@ -277,7 +296,7 @@ function PP(args)
     if type(args) == "string" then
         local result = {}
         for block in ext.split(args, "\n\n") do
-            if block == '' or not block then
+            if block == "" or not block then
                 table.insert(result, BR {})
             else
                 table.insert(result, P(block))
@@ -301,7 +320,7 @@ function PP(args)
                     goto continue
                 end
 
-                if block == '' or not block then
+                if block == "" or not block then
                     table.insert(p.children, BR {})
                 else
                     p = P {}

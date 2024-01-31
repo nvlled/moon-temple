@@ -1,5 +1,18 @@
 local P = {}
-function P.relativePath(srcPath, targetPath, srcPath)
+
+function P.dirPath(path)
+    local i = 1
+    while true do
+        local j = path:find("/", i)
+        if not j then
+            break
+        end
+        i = j + 1
+    end
+    return path:sub(1, i - 2), path:sub(i)
+end
+
+function P.relativePath(targetPath, srcPath)
     if targetPath:sub(1, 1) ~= "/" or not srcPath or srcPath == '' then
         return targetPath
     end
@@ -24,6 +37,20 @@ function P.map(t, fn)
         table.insert(result, fn(v, i))
     end
     return result
+end
+
+function P.slice(t, from, to)
+    local result = {}
+    for i = from, to, 1 do
+        table.insert(result, t[i])
+    end
+    return result
+end
+
+function P.len(t)
+    local count = 0
+    for _ in pairs(t) do count = count + 1 end
+    return count
 end
 
 function P.split(inputstr, sep)
@@ -69,6 +96,21 @@ function P.alt(x, y)
         return y
     end
     return x
+end
+
+function P.parseDateTime(dateTimeStr)
+    if not dateTimeStr then return nil end
+
+    local i = dateTimeStr:find(" ") or #dateTimeStr + 1
+    local dateStr = dateTimeStr:sub(1, i - 1)
+    local timeStr = dateTimeStr:sub(i + 1)
+    local year, month, day = string.match(dateStr, "(%d+)-(%d+)-(%d+)")
+    local hour, min, sec = string.match(timeStr, "(%d+):(%d+):?(%d+)")
+
+    return os.time {
+        year = year, month = month, day = day,
+        hour = hour, min = min, sec = sec
+    }
 end
 
 return P
