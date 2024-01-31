@@ -1,6 +1,47 @@
-
 # moon-temple
 A small static site generator using lua DSL and [readbean](https://redbean.dev) runtime
+
+# Code example
+```lua
+DIV {
+    id="test-id",
+
+    P {
+        class = "ab cd efg",
+        'this is a text',
+        'this is another text',
+        A { href = "index.html", "This is a link to the other page" }
+    },
+
+    BR,
+
+    H1 "heading 1",
+    H2 / A { href="/index.html", "heading 2 with link"},
+    P / SPAN / "<span> inside <p>",
+
+    P [[
+    A block of text.
+    A block of text.
+    ]]
+
+    STYLE {
+        CSS '#test-id' {
+            margin = "5px",
+            border = "2px solid blue",
+            color = "red",
+            background_color = "#003",
+
+            a = { 
+                color = "white", 
+                [":visited"] = { color = "gray", }
+            },
+
+            span = { color = "yellow" },
+            [".ab"] = { color = "green" }
+        }
+    }
+}
+```
 
 # Quick usage
 1. clone this repo
@@ -62,3 +103,4 @@ EOF
 ```
 
 5. done
+

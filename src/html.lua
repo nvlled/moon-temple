@@ -65,11 +65,15 @@ local function attrsToString(attrs)
 end
 
 local function nodeToString(node, level)
+    if not node or not node.tag then
+        return ""
+    end
+
     local prefix = node.options.prefix or ""
     local suffix = node.options.suffix or ""
 
     if node.options.selfClosing then
-        if not node.children or #node.children == 0 and node.tag ~= "script" then
+        if not node.children or #node.children == 0 then
             local tag = node.tag or ""
             return prefix .. "<" .. tag .. attrsToString(node.attrs) .. "/>" .. suffix
         end
@@ -81,6 +85,8 @@ local function nodeToString(node, level)
         ext.map(node.children, function(sub)
             if type(sub) == "string" then
                 return htmlEscape(sub)
+            elseif not sub then
+                return ""
             end
             return nodeToString(sub, level)
         end), ""

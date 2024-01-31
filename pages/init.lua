@@ -1,3 +1,6 @@
+-- init.lua will automatically be ran (dofile'd) before rendering each lua file
+
+-- Default values, these can be overriden by each page
 PAGE_TITLE = ""
 PAGE_DESC  = ""
 PAGE_BODY  = ""

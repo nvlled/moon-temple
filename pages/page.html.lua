@@ -1,23 +1,23 @@
-PAGE_TITLE = 'test title'
-PAGE_DESC = 'test desc'
+PAGE_TITLE = "test title"
+PAGE_DESC = "test desc"
 
 return LAYOUT {
     DIV {
         id = "test-id",
         class = "test-class",
-        DIV 'this is a div',
+        DIV "this is a div",
         HR,
-        SPAN 'span elem',
+        SPAN "span elem",
         P {
             class = "ab cd efg",
-            'this is a text',
+            "this is a text",
             BR,
-            'this is another text',
+            "this is another text",
             BR,
             A { href = "index.html", "This is a link to the other page" }
         },
         STYLE {
-            CSS '#test-id' {
+            CSS "#test-id" {
                 margin = "5px",
                 border = "2px solid blue",
                 color = "red",
