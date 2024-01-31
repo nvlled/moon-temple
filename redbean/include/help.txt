@@ -26,7 +26,7 @@ CLI EXAMPLES
   moon-temple.com render pages/other.html.lua
   moon-temple.com render pages/style.css.lua
 
-LUA SYNTAX OVERVIEW
+QUICK LUA SYNTAX OVERVIEW
 
   In Lua programming language, hashmaps and arrays
   uses the same table literals:
@@ -56,6 +56,7 @@ HTML DSL
   local CUSTOM = Node 'custom'
 
   local node = DIV {
+    class = 'abc efg',
     data_attr1 = 'asdf',
     CUSTOM 'x'
     CUSTOM {'y'}
@@ -92,6 +93,11 @@ CODE EXAMPLES
             BR,
             A { href = "index.html", "This is a link to the other page" }
         },
+
+        H1 "heading 1",
+        H2 / A { href="/index.html", "heading 2 with link"},
+        P / SPAN / "<span> inside <p>",
+
         STYLE {
             CSS '#test-id' {
                 margin = "5px",
@@ -132,6 +138,11 @@ CODE EXAMPLES
                 This is a link to the other page
           </a>
       </p>
+
+      <h1>heading 1</h1>
+      <h2><a href="/index.html">heading 2 with link</a></h2>
+      <p><span>span inside p</span></p>
+
       <style>
           #test-id {
             border: 2px solid blue;
