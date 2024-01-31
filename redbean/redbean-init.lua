@@ -197,6 +197,13 @@ function OnHttpRequest()
             contents = PAGE_BODY
         end
 
+
+        local actualFilename = filename:sub(1, #filename - 4)
+        local contentType = ProgramContentType(actualFilename)
+        if contentType then
+            SetHeader("Content-Type", contentType)
+        end
+
         Write(tostring(contents))
     else
         Route()
