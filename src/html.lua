@@ -65,9 +65,14 @@ local function attrsToString(attrs)
 end
 
 local function nodeToString(node, level)
-    if not node.children or #node.children == 0 and node.tag ~= "script" then
-        local tag = node.tag or ""
-        return "<" .. tag .. attrsToString(node.attrs) .. "/>"
+    local prefix = node.options.prefix or ""
+    local suffix = node.options.suffix or ""
+
+    if node.options.selfClosing then
+        if not node.children or #node.children == 0 and node.tag ~= "script" then
+            local tag = node.tag or ""
+            return prefix .. "<" .. tag .. attrsToString(node.attrs) .. "/>" .. suffix
+        end
     end
 
     if not level then level = 1 end
@@ -85,8 +90,8 @@ local function nodeToString(node, level)
         return body
     end
 
-    return "<" .. node.tag .. attrsToString(node.attrs) .. ">" ..
-        body .. "</" .. node.tag .. ">"
+    return prefix .. "<" .. node.tag .. attrsToString(node.attrs) .. ">" ..
+        body .. "</" .. node.tag .. ">" .. suffix
 end
 
 local appendChild = function(a, b)
@@ -106,9 +111,9 @@ local nodeMeta = {
     __pow = appendChild,
 }
 
-local function _node(tagName, args)
+local function _node(tagName, args, options)
     if type(args) == "string" then
-        local result = { tag = tagName, attrs = {}, children = { args } }
+        local result = { tag = tagName, attrs = {}, children = { args }, options = options or {} }
         setmetatable(result, nodeMeta)
         return result
     end
@@ -154,7 +159,7 @@ local function _node(tagName, args)
         end
     end
 
-    local result = { tag = tagName, attrs = attrs, children = children }
+    local result = { tag = tagName, attrs = attrs, children = children, options = options or {} }
     setmetatable(result, nodeMeta)
 
     return result
@@ -167,13 +172,13 @@ ctorMeta = {
     __idiv = function(self, args) return self.ctor(args) end,
 }
 
-function Node(tagName)
+function Node(tagName, options)
     local ctor = function(args)
         args = args or {}
         if getmetatable(args) == ctorMeta then
             args = args {}
         end
-        local result = _node(tagName, args)
+        local result = _node(tagName, args, options)
         return result
     end
     return setmetatable({ ctor = ctor }, ctorMeta)
@@ -193,17 +198,20 @@ function GetComponentArgs(args)
     return props, children
 end
 
-HTML = Node "html"
+HTML = Node("html", { prefix = "<!DOCTYPE html>" })
+
 HEAD = Node "head"
 TITLE = Node "title"
 BODY = Node "body"
 SCRIPT = Node "script"
-LINK = Node "link"
+LINK = Node("link", { selfClosing = true })
 STYLE = Node "style"
-META = Node "meta"
+META = Node("meta", { selfClosing = true })
+
+A = Node "a"
+BASE = Node("base", { selfClosing = true })
 
 P = Node "p"
-A = Node "a"
 DIV = Node "div"
 SPAN = Node "span"
 
@@ -221,7 +229,7 @@ UL = Node "ul"
 LI = Node "li"
 
 FORM = Node "form"
-INPUT = Node "input"
+INPUT = Node("input", { selfClosing = true })
 TEXTAREA = Node "textarea"
 BUTTON = Node "button"
 LABEL = Node "label"
@@ -231,13 +239,14 @@ OPTION = Node "option"
 TABLE = Node "table"
 THEAD = Node "thead"
 TBODY = Node "tbody"
+COL = Node("col", { selfClosing = true })
 TR = Node "tr"
 TD = Node "td"
 
 SVG = Node "svg"
 
-BR = Node "br"
-HR = Node "hr"
+BR = Node("br", { selfClosing = true })
+HR = Node("hr", { selfClosing = true })
 
 H1 = Node "h1"
 H2 = Node "h2"
@@ -246,9 +255,14 @@ H4 = Node "h4"
 H5 = Node "h5"
 H6 = Node "h6"
 
-IMG = Node "img"
+IMG = Node("img", { selfClosing = true })
+AREA = Node("area", { selfClosing = true })
+
 VIDEO = Node "video"
 IFRAME = Node "iframe"
+EMBED = Node("embed", { selfClosing = true })
+TRACK = Node("track", { selfClosing = true })
+SOURCE = Node("source", { selfClosing = true })
 
 FRAGMENT = Node ""
 

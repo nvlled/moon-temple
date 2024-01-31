@@ -2,31 +2,26 @@ PAGE_TITLE = ""
 PAGE_DESC  = ""
 PAGE_BODY  = ""
 
-
-LAYOUT = function(body)
+LAYOUT     = function(body)
     return HTML {
         HEAD {
+            META { charset = "utf-8" },
             TITLE(PAGE_TITLE or "test"),
-            LINK { rel = "stylesheet", href = "style.css" },
-            STYLE {
-                CSS "body" {
-                }
-            },
-            SCRIPT {
-
-            }
+            LINK { rel = "stylesheet", href = "/style.css" },
         },
         BODY {
             H1 { PAGE_TITLE },
-            HR,
-            HR,
-            BR,
+            H2 / A { href = "#link", "some heading with link" },
+            H3 "heading 3",
             DIV {
                 data_x = true,
                 data_y = "asdf",
                 style = {
                     background_color = "blue"
-                }
+                },
+                EM "div contents 1",
+                BR,
+                S "div contents 2",
             },
             body,
         }
