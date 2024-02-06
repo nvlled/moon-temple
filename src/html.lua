@@ -1,5 +1,9 @@
 local ext = require("ext")
 
+local ppMeta
+local ctorMeta
+local nodeMeta
+
 local function trim(s)
     return s:match("^%s*(.-)%s*$")
 end
@@ -110,8 +114,7 @@ local appendChild = function(a, b)
     return a
 end
 
-local ctorMeta
-local nodeMeta = {
+nodeMeta = {
     __tostring = nodeToString,
     __div = appendChild,
     __pow = appendChild,
@@ -139,7 +142,8 @@ local function _node(tagName, args, options)
                 table.insert(children, v)
             elseif type(v) == "table" then
                 local mt = getmetatable(v)
-                if mt == nodeMeta then
+
+                if mt == nodeMeta or mt == ppMeta then
                     table.insert(children, v)
                 elseif mt and mt == ctorMeta then
                     table.insert(children, v())
@@ -157,9 +161,9 @@ local function _node(tagName, args, options)
                     end
                 end
             elseif type(v) == "function" then
-                table.insert(children, "x" .. tostring(v()))
+                table.insert(children,  tostring(v()))
             elseif v then
-                table.insert(children, "y" .. tostring(v))
+                table.insert(children,  tostring(v))
                 --error("invalid child node: " .. type(v))
             end
         end
@@ -272,7 +276,7 @@ SOURCE = Node("source", { selfClosing = true })
 
 FRAGMENT = Node ""
 
-local ppMeta = {
+ppMeta = {
     __div = function(a, b)
         if type(a) == "function" then
             a = a()

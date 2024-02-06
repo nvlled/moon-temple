@@ -1,5 +1,9 @@
 local P = {}
 
+function P.trim(s)
+    return s:match("^%s*(.-)%s*$")
+end
+
 function P.dirPath(path)
     local i = 1
     while true do
@@ -13,7 +17,7 @@ function P.dirPath(path)
 end
 
 function P.relativePath(targetPath, srcPath)
-    if targetPath:sub(1, 1) ~= "/" or not srcPath or srcPath == '' then
+    if targetPath:sub(1, 1) ~= "/" or not srcPath or srcPath == "" then
         return targetPath
     end
 
@@ -92,7 +96,7 @@ function P.getFileExt(s)
 end
 
 function P.alt(x, y)
-    if not x or x == '' then
+    if not x or x == "" then
         return y
     end
     return x
@@ -106,6 +110,8 @@ function P.parseDateTime(dateTimeStr)
     local timeStr = dateTimeStr:sub(i + 1)
     local year, month, day = string.match(dateStr, "(%d+)-(%d+)-(%d+)")
     local hour, min, sec = string.match(timeStr, "(%d+):(%d+):?(%d+)")
+
+    if not year then return nil end
 
     return os.time {
         year = year, month = month, day = day,
