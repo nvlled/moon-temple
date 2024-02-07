@@ -32,6 +32,15 @@ function Sleep() end
 ---@type fun(key: string, value: string)
 function SetHeader() end
 
+---@type fun(filename: string)
+function Slurp() end
+
+---@type fun(filename: string, data: string)
+function Barf() end
+
+---@type fun(path: string)
+function ProgramDirectory() end
+
 path = {}
 
 ---@type fun(s: string): boolean

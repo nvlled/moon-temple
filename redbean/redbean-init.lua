@@ -284,9 +284,6 @@ function OnHttpRequest()
         return
     end
 
-    -- TODO: I should avoid using dofile here since
-    -- the program would likely break with concurrent HTTP requests
-
     PAGE_PATH = GetPath()
     local pagePath = "." .. PAGE_PATH
 
@@ -323,8 +320,6 @@ args, options = parseOptions()
 local command = args[1]
 
 COMMAND_ARG = command
-
--- TODO: write .moon-temple-types.lua to pages directory
 
 if command == "build" then
     local function deferClose(fd)
@@ -500,8 +495,25 @@ elseif command == "serve" then
     unix.chdir(serveDir)
     dirWatcher = createDirWatcher()
     dirWatcher.start()
+elseif command == "types" then
+    local filename = args[2]
+    local contents = Slurp("/zip/types.lua")
+    if options.stdout then
+        print(contents)
+    elseif not filename then
+        print("usage: " .. arg[-1] .. "types <filename.lua>")
+        print("  Write the lua type definitions to a file (used for the lua-lsp)")
+        print("  --stdout=1 to print to stdout")
+        print("  --overwrite=1 to overwrite existing file")
+        print("Note: normally you just put this file in the project root directory.")
+    elseif not path.exists(filename) or options.overwrite then
+        Barf(filename, contents)
+        print("-> " .. filename)
+    else
+        print("file already exists: " .. filename .. "\nadd --overwrite=1 to overwrite existing file")
+    end
 else
-    print("usage: " .. arg[-1] .. " <serve | render | build> <filename | dir>")
+    print("usage: " .. arg[-1] .. " <serve | render | build | types > <filename | dir>")
     print("-h to see help documentation")
     print("-i to start repl")
 end
