@@ -2,14 +2,20 @@ require "html"
 require "css"
 local ext = require "ext"
 
-local systemPackages = {}
-for k, v in pairs(package.loaded) do
-    systemPackages[k] = v
-end
-
 local args
 local options
 local serveDir = "pages"
+local dirWatcher
+
+AUTORELOAD_SCRIPT = [[
+(function() {
+    var evtSource = new EventSource("/__watch_pages_dir__");
+    evtSource.addEventListener("fsevent", function(event) {
+        window.location.reload();
+    });
+    window.addEventListener("unload", function() { evtSource.close(); })
+})(); ]]
+
 
 local Stub
 Stub = {
@@ -109,13 +115,90 @@ function WalkDir(root, fn)
     loop("")
 end
 
+local function createDirWatcher()
+    local lastModified = {}
+    local firstRun = true
+    local tempFD = unix.tmpfd()
+    local self
+
+    local function onTick()
+        local changed = false
+        local changedFiles = {}
+        WalkDir(".", function(file)
+            local fileExt = ext.getFileExt(file)
+            if fileExt ~= ".html" and fileExt ~= ".html.lua" and fileExt ~= ".lua"
+                and fileExt ~= ".css" and fileExt ~= ".md" and fileExt ~= ".txt" then
+                return
+            end
+
+            local modified = unix.stat(file):mtim()
+            local fileChanged = false
+            if not lastModified[file] then
+                lastModified[file] = modified
+                fileChanged = true
+            elseif lastModified[file] ~= modified then
+                fileChanged = true
+            end
+
+            lastModified[file] = modified
+            if fileChanged then
+                table.insert(changedFiles, file)
+                changed = true
+            end
+        end)
+
+
+        if changed and not firstRun then
+            for _, f in ipairs(changedFiles) do print(f) end
+            unix.futimens(tempFD)
+        end
+        firstRun = false
+    end
+
+    local function start()
+        assert(unix.sigaction(unix.SIGALRM, onTick))
+        assert(unix.setitimer(unix.ITIMER_REAL, 0, 100e6, 0, 100e6))
+    end
+    local function stop()
+        assert(unix.sigaction(unix.SIGALRM, nil))
+    end
+    local function getLastModified()
+        return unix.fstat(tempFD):mtim()
+    end
+
+    self = {
+        start = start,
+        stop = stop,
+        getLastModified = getLastModified,
+    }
+
+    return self
+end
+
+
 local function endsWith(s, suffix)
     return s:sub(- #suffix) == suffix
 end
 
----@type fun(dir: string, type: "init")
-local function runHook(dir, type)
-    local hookFile = path.join(dir, type .. ".lua")
+function runfile(filename, env)
+    print("runfile", filename)
+    if not env then
+        env = {}
+        for k, v in pairs(_ENV) do
+            env[k] = v
+        end
+    end
+
+    if not path.exists(filename) then
+        error("cannot runfile, not found: " .. filename)
+    end
+    local fn = loadfile(filename, "t", env)
+    return fn()
+end
+
+---@type fun(dir: string, env?: table)
+local function runInit(dir, env)
+    local hookFile = path.join(dir, "init.lua")
 
     if options[type] then
         dofile(options[type])
@@ -162,20 +245,47 @@ local function parseOptions()
     return args, options
 end
 
+local function isDir(file)
+    local st = unix.stat(file)
+    if not st then return false end
+    return unix.S_ISDIR(st:mode())
+end
+
+local function handleWatchPagesDirRoute()
+    local running = true
+    assert(unix.sigaction(unix.SIGTERM, function()
+        running = false
+    end))
+    local lastCheck = os.time()
+
+    SetHeader("Cache-Control", "no-store");
+    SetHeader("Content-Type", "text/event-stream");
+
+    while running do
+        local t = dirWatcher.getLastModified()
+        if t > lastCheck then
+            Write("event: fsevent\ndata: x\n\n")
+            lastCheck = t
+        else
+            Write("event: ping\n\n")
+        end
+        coroutine.yield()
+        Sleep(0.09)
+    end
+end
+
+function OnServerStop()
+    dirWatcher.stop()
+end
 
 function OnHttpRequest()
-    for k in pairs(package.loaded) do
-        if not systemPackages[k] then
-            package.loaded[k] = nil
-        end
+    if GetPath() == "/__watch_pages_dir__" then
+        handleWatchPagesDirRoute()
+        return
     end
 
-    local function isDir(file)
-        local st = unix.stat(file)
-        if not st then return false end
-        return unix.S_ISDIR(st:mode())
-    end
-
+    -- TODO: I should avoid using dofile here since
+    -- the program would likely break with concurrent HTTP requests
 
     PAGE_PATH = GetPath()
     local pagePath = "." .. PAGE_PATH
@@ -189,14 +299,13 @@ function OnHttpRequest()
     end
 
     if path.exists(pagePath) then
-        runHook(".", "init")
+        runInit(".")
         local filename = pagePath
         local contents = dofile(filename)
 
         if not contents then
             contents = PAGE_BODY
         end
-
 
         local actualFilename = filename:sub(1, #filename - 4)
         local contentType = ProgramContentType(actualFilename)
@@ -212,6 +321,10 @@ end
 
 args, options = parseOptions()
 local command = args[1]
+
+COMMAND_ARG = command
+
+-- TODO: write .moon-temple-types.lua to pages directory
 
 if command == "build" then
     local function deferClose(fd)
@@ -293,7 +406,7 @@ if command == "build" then
 
             PAGE_PATH = "/" .. string.sub(filename, 1, #filename - 4)
 
-            runHook(".", "init")
+            runInit(".")
 
             local contents = dofile(src)
 
@@ -316,7 +429,7 @@ if command == "build" then
             if endsWith(dest, ".lua") then
                 PAGE_PATH = "/" .. string.sub(filename, 1, #filename - 4)
 
-                runHook(".", "init")
+                runInit(".")
 
                 local contents = dofile(src)
 
@@ -358,7 +471,7 @@ elseif command == "render" then
     package.path = package.path .. ";" .. path.join(unix.realpath(projectDir), "?.lua")
     unix.chdir(projectDir)
 
-    runHook(".", "init")
+    runInit(".")
 
     if not unix.stat(filename) then
         print("file not found: \"" .. filename .. "\" in \"" .. projectDir .. "\"")
@@ -385,9 +498,12 @@ elseif command == "serve" then
     ProgramDirectory(unix.realpath(serveDir))
 
     unix.chdir(serveDir)
+    dirWatcher = createDirWatcher()
+    dirWatcher.start()
 else
     print("usage: " .. arg[-1] .. " <serve | render | build> <filename | dir>")
     print("-h to see help documentation")
+    print("-i to start repl")
 end
 
 if command ~= "serve" then

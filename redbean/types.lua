@@ -26,6 +26,12 @@ function GetHost() end
 ---@type fun()
 function Route() end
 
+---@type fun(seconds: integer)
+function Sleep() end
+
+---@type fun(key: string, value: string)
+function SetHeader() end
+
 path = {}
 
 ---@type fun(s: string): boolean
