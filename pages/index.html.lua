@@ -5,7 +5,8 @@ return LAYOUT {
         H1 "testing",
         HR,
         H2 "testing 2",
+        H8 '123',
     },
     IMG { src = "yomama.png", style = "max-width: 300px" },
-    COMMAND_ARG == "serve" and SCRIPT (AUTORELOAD_SCRIPT),
+    COMMAND_ARG == "serve" and SCRIPT(AUTORELOAD_SCRIPT),
 }

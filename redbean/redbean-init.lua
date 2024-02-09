@@ -2,10 +2,6 @@ require "html"
 require "css"
 local ext = require "ext"
 
-local args
-local options
-local serveDir = "pages"
-local dirWatcher
 
 AUTORELOAD_SCRIPT = [[
 (function() {
@@ -17,23 +13,17 @@ AUTORELOAD_SCRIPT = [[
 })(); ]]
 
 
-local Stub
-Stub = {
-    __call = function(self) return {} end,
-    __concat = function(self) return {} end,
-    __div = function(self) return {} end,
-    __pow = function(self) return {} end,
-    __idiv = function(self) return {} end,
-}
-function StubFunction()
-    return {}
-end
+local dirWatcher
+local args
+local options
+local serveDir = "pages"
 
 function GetPageData(filename)
+    local function stubFn() return {} end
     local env = {}
     for k, v in pairs(_ENV) do
         if type(v) == "function" then
-            env[k] = StubFunction
+            env[k] = stubFn
         else
             env[k] = v
         end
@@ -155,6 +145,7 @@ local function createDirWatcher()
         firstRun = false
     end
 
+
     local function start()
         assert(unix.sigaction(unix.SIGALRM, onTick))
         assert(unix.setitimer(unix.ITIMER_REAL, 0, 50e6, 0, 50e6))
@@ -175,74 +166,13 @@ local function createDirWatcher()
     return self
 end
 
-
-local function endsWith(s, suffix)
-    return s:sub(- #suffix) == suffix
-end
-
-function runfile(filename, env)
-    print("runfile", filename)
-    if not env then
-        env = {}
-        for k, v in pairs(_ENV) do
-            env[k] = v
-        end
-    end
-
-    if not path.exists(filename) then
-        error("cannot runfile, not found: " .. filename)
-    end
-    local fn = loadfile(filename, "t", env)
-    return fn()
-end
-
 ---@type fun(dir: string, env?: table)
 local function runInit(dir, env)
     local hookFile = path.join(dir, "init.lua")
 
-    if options[type] then
-        dofile(options[type])
-    elseif path.exists(hookFile) then
+    if path.exists(hookFile) then
         dofile(hookFile)
     end
-end
-
-local function parseOptions()
-    local args = {}
-    local options = {}
-
-    local skipNext = false
-    for i, x in ipairs(arg) do
-        if skipNext then
-            skipNext = false
-            goto continue
-        end
-
-        if x:sub(1, 1) ~= "-" then
-            table.insert(args, x)
-        else
-            local j = 1
-            while x:sub(j, j) == "-" do j = j + 1 end
-            x = string.sub(x, j)
-            local eqIndex = string.find(x, "=")
-            if eqIndex then
-                local val = string.sub(x, eqIndex + 1, -1)
-                x = string.sub(x, 1, eqIndex - 1)
-                options[x] = val
-            else
-                skipNext = true
-                options[x] = arg[i + 1]
-            end
-
-            if options[x] == "0" or options[x] == "false" or options[x] == "" then
-                options[x] = false
-            end
-        end
-
-        ::continue::
-    end
-
-    return args, options
 end
 
 local function isDir(file)
@@ -274,10 +204,6 @@ local function handleWatchPagesDirRoute()
     end
 end
 
-function OnServerStop()
-    dirWatcher.stop()
-end
-
 function OnHttpRequest()
     if GetPath() == "/__watch_pages_dir__" then
         handleWatchPagesDirRoute()
@@ -291,7 +217,7 @@ function OnHttpRequest()
         pagePath = pagePath .. "index.html"
     end
 
-    if not endsWith(pagePath, ".lua") then
+    if not ext.endsWith(pagePath, ".lua") then
         pagePath = pagePath .. ".lua"
     end
 
@@ -336,6 +262,45 @@ function OnHttpRequest()
         Route()
     end
 end
+
+local function parseOptions()
+    local args = {}
+    local options = {}
+
+    local skipNext = false
+    for i, x in ipairs(arg) do
+        if skipNext then
+            skipNext = false
+            goto continue
+        end
+
+        if x:sub(1, 1) ~= "-" then
+            table.insert(args, x)
+        else
+            local j = 1
+            while x:sub(j, j) == "-" do j = j + 1 end
+            x = string.sub(x, j)
+            local eqIndex = string.find(x, "=")
+            if eqIndex then
+                local val = string.sub(x, eqIndex + 1, -1)
+                x = string.sub(x, 1, eqIndex - 1)
+                options[x] = val
+            else
+                skipNext = true
+                options[x] = arg[i + 1]
+            end
+
+            if options[x] == "0" or options[x] == "false" or options[x] == "" then
+                options[x] = false
+            end
+        end
+
+        ::continue::
+    end
+
+    return args, options
+end
+
 
 args, options = parseOptions()
 local command = args[1]
@@ -522,7 +487,7 @@ elseif command == "types" then
     if options.stdout then
         print(contents)
     elseif not filename then
-        print("usage: " .. arg[-1] .. "types <filename.lua>")
+        print("usage: " .. arg[-1] .. " types <filename.lua>")
         print("  Write the lua type definitions to a file (used for the lua-lsp)")
         print("  --stdout=1 to print to stdout")
         print("  --overwrite=1 to overwrite existing file")
@@ -534,7 +499,7 @@ elseif command == "types" then
         print("file already exists: " .. filename .. "\nadd --overwrite=1 to overwrite existing file")
     end
 else
-    print("usage: " .. arg[-1] .. " <serve | render | build | types > <filename | dir>")
+    print("usage: " .. arg[-1] .. " <serve | render | build | types> <filename | dir>")
     print("-h to see help documentation")
     print("-i to start repl")
 end

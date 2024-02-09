@@ -1,6 +1,6 @@
 SYNOPSIS
 
-  moon-temple.com <serve | build | render> <args...>
+  moon-temple.com <serve | build | render | types> <args...>
 
 DESCRIPTION
 
@@ -16,6 +16,8 @@ COMMANDS
 
   moon-temple.com render <lua-file>
 
+  moon-temple.com types <lua-file>
+
 CLI EXAMPLES
 
   moon-temple.com serve pages/
@@ -25,6 +27,8 @@ CLI EXAMPLES
   moon-temple.com render pages/index.html.lua
   moon-temple.com render pages/other.html.lua
   moon-temple.com render pages/style.css.lua
+
+  moon-temple.com types types.lua
 
 QUICK LUA SYNTAX OVERVIEW
 
@@ -96,7 +100,7 @@ CODE EXAMPLES
 
         H1 "heading 1",
         H2 / A { href="/index.html", "heading 2 with link"},
-        P / SPAN / "<span> inside <p>",
+        P ^ SPAN ^ "<span> inside <p>",
 
         STYLE {
             CSS '#test-id' {
