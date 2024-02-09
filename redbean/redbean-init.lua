@@ -157,7 +157,7 @@ local function createDirWatcher()
 
     local function start()
         assert(unix.sigaction(unix.SIGALRM, onTick))
-        assert(unix.setitimer(unix.ITIMER_REAL, 0, 100e6, 0, 100e6))
+        assert(unix.setitimer(unix.ITIMER_REAL, 0, 50e6, 0, 50e6))
     end
     local function stop()
         assert(unix.sigaction(unix.SIGALRM, nil))
@@ -270,7 +270,7 @@ local function handleWatchPagesDirRoute()
             Write("event: ping\n\n")
         end
         coroutine.yield()
-        Sleep(0.09)
+        Sleep(0.005)
     end
 end
 
@@ -296,21 +296,42 @@ function OnHttpRequest()
     end
 
     if path.exists(pagePath) then
-        runInit(".")
-        local filename = pagePath
-        local contents = dofile(filename)
+        local stat, err = pcall(function()
+            runInit(".")
+            local filename = pagePath
+            local contents = dofile(filename)
 
-        if not contents then
-            contents = PAGE_BODY
+            if not contents then
+                contents = PAGE_BODY
+            end
+
+            local actualFilename = filename:sub(1, #filename - 4)
+            local contentType = ProgramContentType(actualFilename)
+            if contentType then
+                SetHeader("Content-Type", contentType)
+            end
+
+            Write(tostring(contents))
+        end)
+        if err then
+            Write(tostring(HTML {
+                BODY {
+                    style = {
+                        font_size = "200%",
+                        background = "#c00",
+                        color = "white",
+                        max_width = 1024,
+                        margin = "auto",
+                        margin_top = 100
+                    },
+                    B "error: error",
+                    B { err },
+                    BR,
+                    EM { debug.traceback() },
+                    SCRIPT(AUTORELOAD_SCRIPT),
+                },
+            }))
         end
-
-        local actualFilename = filename:sub(1, #filename - 4)
-        local contentType = ProgramContentType(actualFilename)
-        if contentType then
-            SetHeader("Content-Type", contentType)
-        end
-
-        Write(tostring(contents))
     else
         Route()
     end

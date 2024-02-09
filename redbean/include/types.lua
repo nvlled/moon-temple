@@ -5,18 +5,6 @@
 --
 -- Usage: place this file on your project root.
 
----@type string
-COMMAND_ARG = ''
-
----@type string
-AUTORELOAD_SCRIPT = ''
-
----@type fun(filename: string): table
-function GetPageData() end
-
----@type fun(): table
-function GetPageList() end
-
 ---@type (fun(selector: string): fun(args: table): table) | fun(args: table): table
 function CSS() end
 
@@ -189,3 +177,65 @@ function FRAGMENT() end
 
 ---@type fun(args: string): table) | fun(args: table): table
 function PP() end
+
+-- type annotations for redbean: https://redbean.dev
+---@type fun(): string
+function GetPath() end
+
+---@type fun(string): string
+function Write() end
+
+---@type fun(): string
+function GetMtehod() end
+
+-----------------------------------------------------------------
+
+---@type string
+COMMAND_ARG = ''
+
+---@type string
+AUTORELOAD_SCRIPT = ''
+
+---@type fun(filename: string): table
+function GetPageData() end
+
+---@type fun(): table
+function GetPageList() end
+
+
+---@type fun(host: string, path: string): string
+function Route() end
+
+---@type fun(): string
+function GetHost() end
+
+---@type fun()
+function Route() end
+
+---@type fun(seconds: integer)
+function Sleep() end
+
+---@type fun(key: string, value: string)
+function SetHeader() end
+
+---@type fun(filename: string)
+function Slurp() end
+
+---@type fun(filename: string, data: string)
+function Barf() end
+
+---@type fun(path: string)
+function ProgramDirectory() end
+
+path = {}
+
+---@type fun(s: string): boolean
+function path.isdir() end
+
+---@type fun(s: string): boolean
+function path.exists() end
+
+unix = {}
+
+---@type fun(code?: number): boolean
+function unix.exit() end
