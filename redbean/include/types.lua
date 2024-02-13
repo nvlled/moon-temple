@@ -186,15 +186,15 @@ function GetPath() end
 function Write() end
 
 ---@type fun(): string
-function GetMtehod() end
+function GetMethod() end
 
 -----------------------------------------------------------------
 
 ---@type string
-COMMAND_ARG = ''
+COMMAND_ARG = ""
 
 ---@type string
-AUTORELOAD_SCRIPT = ''
+AUTORELOAD_SCRIPT = ""
 
 ---@type fun(filename: string): table
 function GetPageData() end
@@ -202,6 +202,13 @@ function GetPageData() end
 ---@type fun(): table
 function GetPageList() end
 
+---@type fun(fn: fun()): table
+function OnPostRender() end
+
+---@type fun(filenames: string[]): table
+function QueueBuildFiles() end
+
+-----------------------------------------------------------------
 
 ---@type fun(host: string, path: string): string
 function Route() end

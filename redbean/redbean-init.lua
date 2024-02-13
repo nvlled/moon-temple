@@ -16,6 +16,8 @@ local dirWatcher
 local args
 local options
 local serveDir = "pages"
+local postRenderFunctions = {}
+local buildFileQueue = {}
 
 function GetPageData(filename)
     local function stubFn() return {} end
@@ -234,10 +236,11 @@ end
 function SetFilenameParams(filename, params)
     local i, j = filename:find("%b[]")
     if not i then
-        i, j = filename:find(".")
+        i, j = filename:find("%.")
+        j = j - 1
     end
     if not i then
-        return #filename
+        i, j = #filename, #filename
     end
 
     local pre = filename:sub(1, i - 1)
@@ -252,6 +255,42 @@ end
 
 function GetFilenameParams()
     return getFilenameParams(PAGE_PATH)
+end
+
+function FindNodes(root, predicate)
+    local result = {}
+    local function loop(node)
+        if not node then return end
+        if predicate(node) then
+            table.insert(result, node)
+        end
+        for _, c in ipairs(node.children or {}) do
+            loop(c)
+        end
+    end
+    loop(root)
+    return result
+end
+
+function FindLocalLinksWithFilenameParams(root)
+    return FindNodes(root, function(node)
+        if node.tag ~= "a" then return false end
+        local href = node.attrs.href
+        if not href or not href:find("%b[]") then return false end
+        if href:find("^%a+://") then return false end
+        if not ext.endsWith(href, ".html") then return false end
+        return true
+    end)
+end
+
+function OnPostRender(fn)
+    table.insert(postRenderFunctions, fn)
+end
+
+function QueueBuildFiles(filenames)
+    for _, f in ipairs(filenames) do
+        table.insert(buildFileQueue, f)
+    end
 end
 
 function OnHttpRequest()
@@ -274,12 +313,18 @@ function OnHttpRequest()
 
     if path.exists(pagePath) then
         local stat, err = pcall(function()
+            postRenderFunctions = {}
+
             runInit(".")
             local filename = pagePath
             local contents = dofile(filename)
 
             if not contents then
                 contents = PAGE_BODY
+            end
+
+            for _, fn in ipairs(postRenderFunctions) do
+                contents = fn(contents)
             end
 
             local actualFilename = filename:sub(1, #filename - 4)
@@ -393,8 +438,8 @@ if command == "build" then
         srcDir = unix.realpath(srcDir)
         destDir = unix.realpath(destDir)
 
-        if srcDir == destDir and not options.inplace then
-            error("source and destination directories cannot be the same, unless set --inplace")
+        if srcDir == destDir then
+            error("source and destination directories cannot be the same")
         elseif isSubDir(destDir, srcDir) then
             error("destination cannot be inside source")
         elseif isSubDir(srcDir, destDir) then
@@ -424,65 +469,61 @@ if command == "build" then
 
     unix.chdir(srcDir)
 
-    if srcDir == destDir or options.inplace then
-        WalkDir(srcDir, function(filename, kind)
-            local src = path.join(srcDir, filename)
-            local dest = path.join(destDir, filename)
-            unix.makedirs(path.dirname(path.dirname(dest)))
+    local done = {}
+    local files = {}
 
-            if not ext.endsWith(dest, ".lua") then
-                return
-            end
+    WalkDir(srcDir, function(filename)
+        table.insert(files, filename)
+    end)
 
-            dest = string.sub(dest, 1, #dest - 4) -- remove .lua from filename
+    for _, filename in ipairs(files) do
+        if filename:sub(1, 1) == "/" then
+            filename = filename:sub(2) -- remove beginning /
+        end
 
+        if done[filename] then goto skip end
+        done[filename] = true
+
+        local src = path.join(srcDir, filename)
+        local dest = path.join(destDir, filename)
+        unix.makedirs(path.dirname(dest))
+
+        if ext.endsWith(dest, ".lua") then
+            buildFileQueue = {}
+            postRenderFunctions = {}
             PAGE_PATH = "/" .. string.sub(filename, 1, #filename - 4)
 
             runInit(".")
 
-            local contents = dofile(src)
+            local contents = dofile(stripFilenameParams(src))
 
             if not contents then
                 contents = PAGE_BODY
             end
 
+            for _, fn in ipairs(postRenderFunctions) do
+                contents = fn(contents)
+            end
+
+            for _, f in ipairs(buildFileQueue) do
+                table.insert(files, f)
+            end
+
             local str = tostring(contents)
             if str and str ~= "" then
-                print("render " .. src .. " -> " .. dest)
-                Barf(dest, str, 0644)
+                local dest2 = string.sub(dest, 1, #dest - 4) -- remove .lua from filename
+                print("render " .. src .. " -> " .. dest2)
+                Barf(dest2, str, 0644)
             end
-        end)
-    else
-        WalkDir(srcDir, function(filename, kind)
-            local src = path.join(srcDir, filename)
-            local dest = path.join(destDir, filename)
-            unix.makedirs(path.dirname(dest))
+        else
+            print("copy " .. unix.realpath(ext.relativePath(src)) .. " -> " .. dest)
+            copyFile(src, dest)
+        end
 
-            if ext.endsWith(dest, ".lua") then
-                PAGE_PATH = "/" .. string.sub(filename, 1, #filename - 4)
-
-                runInit(".")
-
-                local contents = dofile(src)
-
-                if not contents then
-                    contents = PAGE_BODY
-                end
-
-                local str = tostring(contents)
-                if str and str ~= "" then
-                    local dest2 = string.sub(dest, 1, #dest - 4) -- remove .lua from filename
-                    print("render " .. src .. " -> " .. dest2)
-                    Barf(dest2, str, 0644)
-                end
-            else
-                print("copy " .. unix.realpath(ext.relativePath(src)) .. " -> " .. dest)
-                copyFile(src, dest)
-            end
-        end)
-
-        Barf(path.join(destDir, ".site-generator"), "moon-temple")
+        ::skip::
     end
+
+    Barf(path.join(destDir, ".site-generator"), "moon-temple")
 elseif command == "run" then
     local filename = args[2]
     if not filename then
