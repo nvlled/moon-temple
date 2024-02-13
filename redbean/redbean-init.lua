@@ -2,7 +2,6 @@ require "html"
 require "css"
 local ext = require "ext"
 
-
 AUTORELOAD_SCRIPT = [[
 (function() {
     var evtSource = new EventSource("/__watch_pages_dir__");
@@ -204,6 +203,57 @@ local function handleWatchPagesDirRoute()
     end
 end
 
+local function getFilenameParams(filename)
+    local result = {}
+    local str = filename:match("%[(.*)%]")
+    if not str then
+        return result
+    end
+    for s in ext.split(str, ",") do
+        local i = s:find("=")
+        if i then
+            local key = ext.trim(s:sub(1, i - 1))
+            local value = ext.trim(s:sub(i + 1))
+            if key and value and #key > 0 and #value > 0 then
+                result[key] = value
+            end
+        end
+    end
+
+    return result
+end
+
+function stripFilenameParams(filename)
+    local i, j = filename:find("%b[]")
+    if not i then
+        return filename
+    end
+    return filename:sub(1, i - 1) .. filename:sub(j + 1)
+end
+
+function SetFilenameParams(filename, params)
+    local i, j = filename:find("%b[]")
+    if not i then
+        i, j = filename:find(".")
+    end
+    if not i then
+        return #filename
+    end
+
+    local pre = filename:sub(1, i - 1)
+    local post = filename:sub(j + 1)
+    local s = {}
+    for k, v in pairs(params) do
+        table.insert(s, tostring(k) .. "=" .. tostring(v))
+    end
+
+    return pre .. "[" .. table.concat(s, ",") .. "]" .. post
+end
+
+function GetFilenameParams()
+    return getFilenameParams(PAGE_PATH)
+end
+
 function OnHttpRequest()
     if GetPath() == "/__watch_pages_dir__" then
         handleWatchPagesDirRoute()
@@ -220,6 +270,7 @@ function OnHttpRequest()
     if not ext.endsWith(pagePath, ".lua") then
         pagePath = pagePath .. ".lua"
     end
+    pagePath = stripFilenameParams(pagePath)
 
     if path.exists(pagePath) then
         local stat, err = pcall(function()
@@ -379,7 +430,7 @@ if command == "build" then
             local dest = path.join(destDir, filename)
             unix.makedirs(path.dirname(path.dirname(dest)))
 
-            if not endsWith(dest, ".lua") then
+            if not ext.endsWith(dest, ".lua") then
                 return
             end
 
@@ -407,7 +458,7 @@ if command == "build" then
             local dest = path.join(destDir, filename)
             unix.makedirs(path.dirname(dest))
 
-            if endsWith(dest, ".lua") then
+            if ext.endsWith(dest, ".lua") then
                 PAGE_PATH = "/" .. string.sub(filename, 1, #filename - 4)
 
                 runInit(".")
