@@ -250,6 +250,10 @@ function SetFilenameParams(filename, params)
         table.insert(s, tostring(k) .. "=" .. tostring(v))
     end
 
+    if #s == 0 then
+        return pre .. post
+    end
+
     return pre .. "[" .. table.concat(s, ",") .. "]" .. post
 end
 
@@ -278,6 +282,12 @@ function FindLocalLinksWithFilenameParams(root)
         local href = node.attrs.href
         if not href or not href:find("%b[]") then return false end
         if href:find("^%a+://") then return false end
+
+        do
+            local i = href:find("#")
+            if i then href = href:sub(1, i - 1) end
+        end
+
         if not ext.endsWith(href, ".html") then return false end
         return true
     end)
@@ -481,11 +491,22 @@ if command == "build" then
             filename = filename:sub(2) -- remove beginning /
         end
 
+        do
+            local i = filename:find("#")
+            if i then filename = filename:sub(1, i - 1) end
+        end
+
         if done[filename] then goto skip end
         done[filename] = true
 
+        if ext.endsWith(filename, ".html") and path.exists(stripFilenameParams(filename) .. ".lua") then
+            filename = filename .. ".lua"
+        end
+
         local src = path.join(srcDir, filename)
         local dest = path.join(destDir, filename)
+
+
         unix.makedirs(path.dirname(dest))
 
         if ext.endsWith(dest, ".lua") then
@@ -516,8 +537,13 @@ if command == "build" then
                 Barf(dest2, str, 0644)
             end
         else
-            print("copy " .. unix.realpath(ext.relativePath(src)) .. " -> " .. dest)
-            copyFile(src, dest)
+            local realpath = unix.realpath(ext.relativePath(src))
+            if not realpath then
+                error("not found: " .. ext.relativePath(src))
+            else
+                print("copy " .. realpath .. " -> " .. dest)
+                copyFile(src, dest)
+            end
         end
 
         ::skip::
