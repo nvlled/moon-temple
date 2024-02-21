@@ -1,4 +1,5 @@
 local ext = require("ext")
+local markdown = require("markdown")
 
 local ppMeta
 local ctorMeta
@@ -73,6 +74,10 @@ local function nodeToString(node, level)
         return ""
     end
 
+    if node.options.tostring then
+        return node.options.tostring(node)
+    end
+
     local prefix = node.options.prefix or ""
     local suffix = node.options.suffix or ""
 
@@ -88,7 +93,7 @@ local function nodeToString(node, level)
     local body = table.concat(
         ext.map(node.children, function(sub)
             if type(sub) == "string" then
-                return htmlEscape(sub)
+                return node.options.noHTMLEscape and sub or htmlEscape(sub)
             elseif not sub then
                 return ""
             end
@@ -161,9 +166,9 @@ local function _node(tagName, args, options)
                     end
                 end
             elseif type(v) == "function" then
-                table.insert(children,  tostring(v()))
+                table.insert(children, v())
             elseif v then
-                table.insert(children,  tostring(v))
+                table.insert(children, tostring(v))
                 --error("invalid child node: " .. type(v))
             end
         end
@@ -213,9 +218,9 @@ HTML = Node("html", { prefix = "<!DOCTYPE html>" })
 HEAD = Node "head"
 TITLE = Node "title"
 BODY = Node "body"
-SCRIPT = Node "script"
+SCRIPT = Node("script", { noHTMLEscape = true })
 LINK = Node("link", { selfClosing = true })
-STYLE = Node "style"
+STYLE = Node("style", { noHTMLEscape = true })
 META = Node("meta", { selfClosing = true })
 
 A = Node "a"
@@ -275,6 +280,21 @@ TRACK = Node("track", { selfClosing = true })
 SOURCE = Node("source", { selfClosing = true })
 
 FRAGMENT = Node ""
+
+MD = Node("", {
+    tostring = function(node)
+        local str = trim(table.concat(node.children, ""))
+        local lines = {}
+        for line in ext.split(str, "\n") do
+            line = trim(line)
+            if line:sub(1, 2) == "| " then
+                line = "    " .. line:sub(3)
+            end
+            table.insert(lines, line)
+        end
+        return markdown(table.concat(lines, "\n"))
+    end
+})
 
 ppMeta = {
     __div = function(a, b)
@@ -364,5 +384,5 @@ function PP(args)
 end
 
 return {
-    Node=Node,
+    Node = Node,
 }
