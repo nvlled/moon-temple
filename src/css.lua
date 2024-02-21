@@ -33,18 +33,35 @@ local function cssToString(ruleset)
             table.insert(buffer, decl)
         end
 
-        table.insert(buffer, "}")
-        if i ~= n then
-            table.insert(buffer, "\n")
-        end
+        table.insert(buffer, "}\n")
 
         ::continue::
     end
     return table.concat(buffer, "")
 end
 
+local function mediaToString(media)
+    local buffer = {}
+    for _, ruleset in ipairs(media.rulesets) do
+        for line in ext.split(tostring(ruleset), "\n") do
+            table.insert(buffer, "  " .. line)
+        end
+    end
+    if #buffer > 0 then
+        buffer[#buffer] = ext.trim(buffer[#buffer])
+    end
+
+    return "@media " .. media.types .. " {\n" ..
+        table.concat(buffer, "\n") ..
+        "}"
+end
+
 local cssMeta = {
     __tostring = cssToString
+}
+
+local cssMediaMeta = {
+    __tostring = mediaToString
 }
 
 
@@ -120,6 +137,11 @@ local function _CSS(args, selector)
     return result
 end
 
+local function _CSS_MEDIA(args, types)
+    local result = { types = types, rulesets = args }
+    return result
+end
+
 function CSS(selector)
     if type(selector) == "table" then
         local css = _CSS(selector, "")
@@ -132,6 +154,14 @@ function CSS(selector)
         setmetatable(css, cssMeta)
 
         return css
+    end
+end
+
+function CSS_MEDIA(types)
+    return function(args)
+        local media = _CSS_MEDIA(args, types)
+        setmetatable(media, cssMediaMeta)
+        return media
     end
 end
 

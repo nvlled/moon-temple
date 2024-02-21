@@ -8,6 +8,9 @@
 ---@type (fun(selector: string): fun(args: table): table) | fun(args: table): table
 function CSS() end
 
+---@type fun(types: string): fun(args: table): table
+function CSS_MEDIA() end
+
 ---@type fun(tag: string): fun(args: table): table
 function Node() end
 
