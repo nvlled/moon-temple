@@ -265,6 +265,8 @@ function FindNodes(root, predicate)
     local result = {}
     local function loop(node)
         if not node then return end
+        if type(node) ~= "table" then return end
+
         if predicate(node) then
             table.insert(result, node)
         end
@@ -278,7 +280,7 @@ end
 
 function FindLocalLinksWithFilenameParams(root)
     return FindNodes(root, function(node)
-        if node.tag ~= "a" then return false end
+        if type(node) ~= "table" or node.tag ~= "a" then return false end
         local href = node.attrs.href
         if not href or not href:find("%b[]") then return false end
         if href:find("^%a+://") then return false end
