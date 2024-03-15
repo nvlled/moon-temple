@@ -22,21 +22,35 @@ end
 local function cssToString(ruleset)
     local buffer = {}
     local n = #ruleset
-    for i, rule in ipairs(ruleset) do
+
+
+    for _, rule in ipairs(ruleset) do
         if not rule or rule.selector == "" or ext.len(rule.declarations) == 0 then
             goto continue
         end
-        table.insert(buffer, trim(rule.selector) .. " {\n")
+
+        local indent = ""
+        if rule.mediaQuery then
+            indent = "  "
+            table.insert(buffer, "@media " .. rule.mediaQuery .. "{\n")
+        end
+
+        table.insert(buffer, indent .. trim(rule.selector) .. " {\n")
 
         for _, e in ipairs(sortTable(rule.declarations)) do
             local decl = "  " .. e.k .. ": " .. e.v .. ";\n"
-            table.insert(buffer, decl)
+            table.insert(buffer, indent .. decl)
         end
 
-        table.insert(buffer, "}\n")
+        table.insert(buffer, indent .. "}\n")
+
+        if rule.mediaQuery then
+            table.insert(buffer, "}\n")
+        end
 
         ::continue::
     end
+
     return table.concat(buffer, "")
 end
 
@@ -89,6 +103,7 @@ local function _CSS(args, selector)
     end
 
     local rule = {
+        mediaQuery = nil,
         selector = selector,
         declarations = {},
     }
@@ -107,6 +122,8 @@ local function _CSS(args, selector)
                 end
             elseif type(value) == "number" then
                 rule.declarations[underscore2Dash(key)] = tostring(value) .. "px"
+            elseif key == "@media" then
+                rule.mediaQuery = tostring(value)
             else
                 rule.declarations[underscore2Dash(key)] = tostring(value)
             end
@@ -122,6 +139,20 @@ local function _CSS(args, selector)
             for _, rule in ipairs(value) do
                 rule.selector = appendSelector(selector, rule.selector)
                 table.insert(result, rule)
+            end
+        elseif getmetatable(value) == cssMediaMeta then
+            for _, ruleset in ipairs(value.rulesets) do
+                for _, rule in ipairs(ruleset) do
+                    rule.selector = appendSelector(selector, rule.selector)
+
+                    if rule.mediaQuery then
+                        rule.mediaQuery = value.types .. " and " .. rule.mediaQuery
+                    else
+                        rule.mediaQuery = value.types
+                    end
+
+                    table.insert(result, rule)
+                end
             end
         else
             for k, v in pairs(value) do

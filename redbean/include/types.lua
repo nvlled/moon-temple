@@ -11,13 +11,10 @@ function CSS() end
 ---@type fun(types: string): fun(args: table): table
 function CSS_MEDIA() end
 
----@type fun(tag: string): fun(args: table): table
+---@type fun(tag: string, options?:table): fun(args: table): table
 function Node() end
 
 ---@alias Tag fun(args: table|string): table
-
----@type Tag
-function HTML() end
 
 ---@type Tag
 function HEAD() end
@@ -205,7 +202,7 @@ function GetPageData() end
 ---@type fun(): table
 function GetPageList() end
 
----@type fun(fn: fun()): table
+---@type fun(fn: fun(): table)
 function OnPostRender() end
 
 ---@type fun(filenames: string[]): table
