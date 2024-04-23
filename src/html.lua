@@ -68,6 +68,33 @@ local function attrsToString(attrs)
     return " " .. table.concat(entries, " ")
 end
 
+local function nodeTextContent(node)
+    if not node or not node.tag then
+        return ""
+    end
+
+    if node.options.tostring then
+        return node.options.tostring(node)
+    end
+
+    if node.options.selfClosing then
+        if not node.children or #node.children == 0 then
+            return ""
+        end
+    end
+
+    return table.concat(
+        ext.map(node.children, function(sub)
+            if type(sub) == "string" then
+                return node.options.noHTMLEscape and sub or htmlEscape(sub)
+            elseif not sub then
+                return ""
+            end
+            return nodeToString(sub, level)
+        end), ""
+    )
+end
+
 local function nodeToString(node, level)
     if not node or not node.tag then
         return ""
@@ -119,6 +146,7 @@ local appendChild = function(a, b)
 end
 
 nodeMeta = {
+    __textContent = nodeTextContent,
     __tostring = nodeToString,
     __div = appendChild,
     __pow = appendChild,
@@ -328,6 +356,7 @@ ppMeta = {
     end,
     __pow = function(a, b) return nodeMeta.__pow(a, b) end,
     __tostring = function(x) return nodeMeta.__tostring(x) end,
+    __textContent = function(x) return nodeMeta.__textContent(x) end,
 }
 
 function PP(args)

@@ -123,6 +123,14 @@ function P.getFileExt(s)
     return ""
 end
 
+function P.reverse(xs)
+    local result = {}
+    for i = #xs, 1, -1 do
+        result[#xs - i + 1] = xs[i]
+    end
+    return result
+end
+
 function P.alt(x, y)
     if not x or x == "" then
         return y

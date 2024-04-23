@@ -71,11 +71,13 @@ local function mediaToString(media)
 end
 
 local cssMeta = {
-    __tostring = cssToString
+    __tostring = cssToString,
+    __textContent = cssToString
 }
 
 local cssMediaMeta = {
-    __tostring = mediaToString
+    __tostring = mediaToString,
+    __textContent = mediaToString
 }
 
 
