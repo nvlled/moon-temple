@@ -10,25 +10,22 @@ DESCRIPTION
 
 COMMANDS
   
-  moon-temple.com serve <site-directory>
+  moon-temple.com serve --port=$PORT <site-directory>
   
   moon-temple.com build <site-directory> <output-directory>
 
   moon-temple.com render <lua-file>
 
-  moon-temple.com types <lua-file>
-
 CLI EXAMPLES
 
   moon-temple.com serve pages/
+  moon-temple.com serve --port=9000 pages/
 
   moon-temple.com build pages/ output/
 
   moon-temple.com render pages/index.html.lua
   moon-temple.com render pages/other.html.lua
   moon-temple.com render pages/style.css.lua
-
-  moon-temple.com types types.lua
 
 QUICK LUA SYNTAX OVERVIEW
 

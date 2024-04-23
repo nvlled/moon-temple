@@ -146,7 +146,6 @@ local function createDirWatcher()
         firstRun = false
     end
 
-
     local function start()
         assert(unix.sigaction(unix.SIGALRM, onTick))
         assert(unix.setitimer(unix.ITIMER_REAL, 0, 50e6, 0, 50e6))
@@ -219,6 +218,8 @@ local function getFilenameParams(filename)
             if key and value and #key > 0 and #value > 0 then
                 result[key] = value
             end
+        else
+            result[s] = true
         end
     end
 
@@ -257,8 +258,16 @@ function SetFilenameParams(filename, params)
     return pre .. "[" .. table.concat(s, ",") .. "]" .. post
 end
 
-function GetFilenameParams()
-    return getFilenameParams(PAGE_PATH)
+function UpdateFilenameParams(filename, newParams)
+    local params = getFilenameParams(filename)
+    for k, v in pairs(newParams) do
+        params[k] = v
+    end
+    return SetFilenameParams(filename, params)
+end
+
+function GetFilenameParams(filename)
+    return getFilenameParams(filename or PAGE_PATH)
 end
 
 function FindNodes(root, predicate)
@@ -305,6 +314,10 @@ function QueueBuildFiles(filenames)
     end
 end
 
+function OnServerListen(_, ip, port)
+    print("server listening at " .. FormatIp(ip) .. ":" .. port, CategorizeIp(ip))
+end
+
 function OnHttpRequest()
     if GetPath() == "/__watch_pages_dir__" then
         handleWatchPagesDirRoute()
@@ -318,12 +331,18 @@ function OnHttpRequest()
         pagePath = pagePath .. "index.html"
     end
 
-    if not ext.endsWith(pagePath, ".lua") then
+    if ext.endsWith(pagePath, ".html") or ext.endsWith(pagePath, ".css") then
         pagePath = pagePath .. ".lua"
     end
+
     pagePath = stripFilenameParams(pagePath)
 
-    if path.exists(pagePath) then
+    if ext.endsWith(pagePath, ".js.lua") then
+        local contents = Slurp(pagePath)
+        SetHeader("Content-Type", "text/javascript")
+        Write(contents)
+    elseif path.exists(pagePath) and ext.endsWith(pagePath, ".lua") then
+        print("running script", pagePath)
         local stat, err = pcall(function()
             postRenderFunctions = {}
 
@@ -409,6 +428,7 @@ local function parseOptions()
     return args, options
 end
 
+SharedState = {}
 
 args, options = parseOptions()
 local command = args[1]
@@ -511,7 +531,7 @@ if command == "build" then
 
         unix.makedirs(path.dirname(dest))
 
-        if ext.endsWith(dest, ".lua") then
+        if ext.endsWith(dest, ".lua") and not ext.endsWith(dest, ".js.lua") then
             buildFileQueue = {}
             postRenderFunctions = {}
             PAGE_PATH = "/" .. string.sub(filename, 1, #filename - 4)
@@ -601,22 +621,9 @@ elseif command == "serve" then
     unix.chdir(serveDir)
     dirWatcher = createDirWatcher()
     dirWatcher.start()
-elseif command == "types" then
-    local filename = args[2]
-    local contents = Slurp("/zip/types.lua")
-    if options.stdout then
-        print(contents)
-    elseif not filename then
-        print("usage: " .. arg[-1] .. " types <filename.lua>")
-        print("  Write the lua type definitions to a file (used for the lua-lsp)")
-        print("  --stdout=1 to print to stdout")
-        print("  --overwrite=1 to overwrite existing file")
-        print("Note: normally you just put this file in the project root directory.")
-    elseif not path.exists(filename) or options.overwrite then
-        Barf(filename, contents)
-        print("-> " .. filename)
-    else
-        print("file already exists: " .. filename .. "\nadd --overwrite=1 to overwrite existing file")
+
+    if options.port then
+        ProgramPort(tonumber(options.port))
     end
 else
     print("usage: " .. arg[-1] .. " <serve | render | build | types> <filename | dir>")

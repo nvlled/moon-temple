@@ -16,6 +16,10 @@ function P.dirPath(path)
     return path:sub(1, i - 2), path:sub(i)
 end
 
+function P.isEmptyString(str)
+    return not str or str == ""
+end
+
 function P.relativePath(targetPath, srcPath)
     if targetPath:sub(1, 1) ~= "/" or not srcPath or srcPath == "" then
         return targetPath
@@ -35,11 +39,35 @@ function P.relativePath(targetPath, srcPath)
     return string.rep("../", slashCount - 1) .. targetPath:sub(2)
 end
 
+function P.filter(t, pred)
+    local result = {}
+    for i, v in pairs(t) do
+        if pred(v, i) then
+            table.insert(result, v)
+        end
+    end
+    return result
+end
+
 function P.map(t, fn)
     local result = {}
     for i, v in pairs(t) do
         table.insert(result, fn(v, i))
     end
+    return result
+end
+
+function P.mapSlice(si, sj, t, fn)
+    local result = {}
+    for i, v in pairs(t) do
+        if i >= si then
+            table.insert(result, fn(v, i))
+        end
+        if i >= sj then
+            goto finish
+        end
+    end
+    ::finish::
     return result
 end
 
